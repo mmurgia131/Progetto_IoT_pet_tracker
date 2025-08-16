@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Pet Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: #f8fafc;
+      color: #222;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 16px 40px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      min-height: 64px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      height: 54px;
+      width: 54px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 2px 8px #bcd;
+    }
+    .title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1976d2;
+      letter-spacing: 0.5px;
+      margin-bottom: 0;
+    }
+    .main {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 34px 10px 55px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .locate-btn-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 22px;
+    }
+    .btn-locate {
+      background: linear-gradient(90deg, #10b981 65%, #16dbaa 100%);
+      color: white;
+      border: none;
+      padding: 16px 40px;
+      border-radius: 16px;
+      font-size: 1.22rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      box-shadow: 0 2px 12px #b2e7c9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-locate:hover {
+      background: linear-gradient(90deg, #059669 60%, #1de9b6 100%);
+    }
+    .section-title {
+      font-size: 1.32rem;
+      font-weight: 700;
+      color: #1976d2;
+      margin-bottom: 20px;
+      margin-top: 6px;
+      text-align: center;
+    }
+    .pet-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 35px;
+      margin-top: 8px;
+      width: 100%;
+    }
+    .pet-card-btn {
+      background: #f6fbff;
+      border: 2px solid #e3f2fd;
+      border-radius: 13px;
+      min-width: 170px;
+      padding: 26px 32px;
+      color: #1976d2;
+      font-weight: 700;
+      font-size: 1.11rem;
+      transition: box-shadow 0.15s, background 0.18s, color 0.18s, border 0.15s;
+      box-shadow: 0 2px 8px rgb(51 81 128 / 6%);
+      cursor: pointer;
+      text-align: center;
+      outline: none;
+    }
+    .pet-card-btn:hover {
+      background: #1976d2;
+      color: #fff;
+      border: 2px solid #1976d2;
+      box-shadow: 0 7px 18px rgba(25, 118, 210, 0.12);
+      transform: translateY(-1.5px) scale(1.03);
+    }
+    .no-pets-msg {
+      margin-bottom:28px;
+      color:#1976d2;
+      font-weight:600;
+      font-size:1.15rem;
+      text-align:center;
+    }
+    .options-col {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      margin-bottom: 26px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .main-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 13px;
+      padding: 18px 0;
+      font-size: 1.13rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 70%;
+      min-width: 260px;
+      max-width: 500px;
+      margin: 0 auto;
+      box-shadow: 0 2px 12px #e3f0fd;
+      transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
+      outline: none;
+    }
+    .main-btn:hover {
+      background: #1256a9;
+      box-shadow: 0 6px 20px #b9d6fa;
+      transform: translateY(-2px) scale(1.02);
+    }
+    .telegram-box {
+      margin-top: 36px;
+      text-align: center;
+    }
+    .telegram-box button {
+      background: #1976d2;
+      color: #fff;
+      font-size: 1.07rem;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 11px;
+      font-weight: 600;
+      box-shadow: 0 2px 12px #c7e1fb;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .telegram-box button:hover {
+      background: #1256a9;
+    }
+    .telegram-box p {
+      margin-top: 13px;
+      color: #1976d2;
+      font-size: 1.01rem;
+    }
+    @media (max-width: 700px) {
+      .main { max-width: 98vw; }
+      .pet-row { gap: 9px; }
+      .pet-card-btn { min-width: 90px; padding: 16px 8vw;}
+      .header { padding: 12px 3vw; }
+      .logo { height: 42px; width: 42px; }
+      .title { font-size: 1.25rem; }
+      .section-title { font-size: 1.09rem; }
+      .main-btn, .telegram-box button { width: 99vw; font-size: 1.05rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="{{ url_for('static', filename='pet_tracker_logo.png') }}" alt="Logo Pet Tracker" class="logo">
+    <span class="title">Pet Tracker</span>
+  </div>
+  <div class="main">
+    <div class="locate-btn-container">
+      <form method="get" action="{{ url_for('localizza') }}">
+        <button type="submit" class="btn-locate">📍 Localizza il tuo pet</button>
+      </form>
+    </div>
+    <h2 class="section-title">Seleziona il pet da monitorare</h2>
+    {% if not pets %}
+      <div class="no-pets-msg">
+        Non ci sono animali registrati
+      </div>
+    {% else %}
+      <div class="pet-row">
+        {% for pet in pets %}
+          <form action="{{ url_for('dashboard_pet', pet_id=pet._id) }}" method="get" style="display:inline;">
+            <button class="pet-card-btn" type="submit">{{ pet.name }}</button>
+          </form>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="options-col">
+      <form action="{{ url_for('pets') }}" method="get">
+        <button class="main-btn" type="submit">
+          + Aggiungi nuovo animale
+        </button>
+      </form>
+      <form action="{{ url_for('config_area_main') }}" method="get">
+        <button class="main-btn" type="submit">
+          Configura area e stanze
+        </button>
+      </form>
+    </div>
+    <div class="telegram-box">
+      <a href="https://t.me/Esame_IoT_bot" target="_blank">
+        <button type="button">
+          🔔 Iscriviti alle notifiche Telegram
+        </button>
+      </a>
+      <p>
+        Per ricevere notifiche, clicca il pulsante sopra e invia <b>/start</b> al bot su Telegram!
+      </p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Seleziona Animale</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <h1>Ciao {{ session.username }}!</h1>
+    <h2>Seleziona l'animale da monitorare:</h2>
+    <ul>
+      {% for pet in pets %}
+        <li>
+            <a href="{{ url_for('select_pet', pet_id=pet._id) }}">{{ pet['name'] }}</a>
+        </li>
+      {% else %}
+        <li>Nessun animale associato al tuo profilo.</li>
+      {% endfor %}
+    </ul>
+    <a href="{{ url_for('logout') }}">Logout</a>
+</div>
+</body>
+</html>

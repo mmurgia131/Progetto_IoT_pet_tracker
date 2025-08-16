@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Streaming ESP32-CAM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { background: #fafafa; }
+        .dashboard-btn-container {
+            margin: 16px 0 32px 10px;
+        }
+        .dashboard-btn {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1.25rem;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(25,118,210,0.13);
+            transition: background 0.2s;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-btn:hover { background: #125a9c; }
+
+        .container {
+            max-width: 700px;
+            margin: 40px auto;
+            background: #fff;
+            padding: 32px;
+            border-radius: 10px;
+            box-shadow: 0 0 16px #ddd;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1976d2;
+            margin-bottom: 18px;
+        }
+        #cam {
+            border-radius: 12px;
+            margin-top: 20px;
+            box-shadow: 0 2px 16px #e3eaf3;
+            background: #e3eaf3;
+            display: none; /* Nascondi l'immagine quando non c'è streaming */
+        }
+        .controls {
+            margin-top: 22px;
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+        }
+        button.control {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            padding: 10px 26px;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
+        }
+        button.control.stop {
+            background: #d32f2f;
+        }
+        button.control.flash-on {
+            background: #FFD600;
+            color: #333;
+        }
+        #status {
+            margin-top: 24px;
+            font-size: 1.08rem;
+            color: #555;
+        }
+        #disconnected-message {
+            color: #d32f2f;
+            font-weight: 500;
+            margin-top: 24px;
+            font-size: 1.18rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-btn-container">
+        <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
+            <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+        </form>
+    </div>
+    <div class="container">
+        <h1>🐾 Streaming Pet Tracker</h1>
+        <div class="controls">
+            <button id="streamBtn" class="control stop">Blocca Streaming</button>
+            <button id="flashBtn" class="control">Accendi Flash</button>
+        </div>
+        <img id="cam" width="420" style="display:none" alt="">
+        <div id="status"></div>
+        <div id="disconnected-message" style="display:none;">
+            🚫 <b>Streaming interrotto.</b><br>
+            Premi "<b>Riattiva Streaming</b>" per continuare a guardare il tuo pet!
+        </div>
+    </div>
+    <script>
+        let ws = null;
+        let streamingOn = true;
+        let flashOn = false;
+
+        function connectWS() {
+            ws = new WebSocket("ws://172.20.10.4:8765"); // Cambia IP se serve
+            ws.onopen = () => {
+                document.getElementById('status').textContent = "";
+                document.getElementById("cam").style.display = "inline-block";
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "frame") {
+                        document.getElementById("cam").src = "data:image/jpeg;base64," + data.frame;
+                        document.getElementById("cam").style.display = "inline-block";
+                    }
+                } catch (e) {
+                    document.getElementById('status').textContent = "Errore parsing frame";
+                }
+            };
+
+            ws.onerror = (err) => {
+                document.getElementById('status').textContent = "";
+            };
+            ws.onclose = () => {
+                document.getElementById("cam").style.display = "none";
+            };
+        }
+
+        connectWS();
+
+        // Pulsante streaming
+        document.getElementById('streamBtn').onclick = function() {
+            const discMsg = document.getElementById('disconnected-message');
+            if (streamingOn) {
+                ws.close();
+                this.textContent = "Riattiva Streaming";
+                this.classList.remove("stop");
+                streamingOn = false;
+                document.getElementById("cam").src = "";
+                document.getElementById("cam").style.display = "none";
+                document.getElementById('status').textContent = "";
+                discMsg.style.display = "block";
+            } else {
+                connectWS();
+                this.textContent = "Blocca Streaming";
+                this.classList.add("stop");
+                streamingOn = true;
+                discMsg.style.display = "none";
+            }
+        };
+
+        // Pulsante Flash
+        document.getElementById('flashBtn').onclick = function() {
+            if (!ws || ws.readyState !== 1) {
+                document.getElementById('status').textContent = "WebSocket non connesso!";
+                return;
+            }
+            let msg = {
+                type: "control_command",
+                command: flashOn ? "flash:off" : "flash:on"
+            };
+            ws.send(JSON.stringify(msg));
+            flashOn = !flashOn;
+            this.textContent = flashOn ? "Spegni Flash" : "Accendi Flash";
+            if (flashOn) {
+                this.classList.add("flash-on");
+            } else {
+                this.classList.remove("flash-on");
+            }
+        };
+    </script>
+</body>
+</html>

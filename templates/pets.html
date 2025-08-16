@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestione Animali</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { background: #fafafa; }
+        .container { max-width: 900px; margin: 40px auto; background: #fff; padding: 32px; border-radius: 10px; box-shadow: 0 0 16px #ddd; }
+        h1 { font-size: 2.2rem; color: #1976d2; margin-bottom: 28px; }
+        .pets-list { display: flex; flex-wrap: wrap; gap: 24px; }
+        .pet-card { background: #f4faff; border-radius: 8px; box-shadow: 0 2px 10px #e3eaf3; padding: 20px 22px; min-width: 250px; max-width: 280px; flex: 1 0 250px; }
+        .pet-card h2 { margin: 0; color: #1976d2; font-size: 1.4rem; }
+        .pet-info { font-size: 1.05rem; margin: 10px 0 16px 0; color: #444; }
+        .pet-actions button { margin-right: 8px; background: #1976d2; color: #fff; border: none; padding: 7px 15px; border-radius: 5px; cursor: pointer; font-size: 0.95rem;}
+        .pet-actions .delete { background: #d32f2f; }
+        .pet-actions .edit { background: #ffa000; color: #333; }
+        .add-pet-form { margin-top: 35px; background: #f7f7f7; padding: 22px; border-radius: 8px; box-shadow: 0 1px 6px #e3eaf3;}
+        .add-pet-form h3 { margin-top: 0; color: #1976d2;}
+        .add-pet-form input { margin-right: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; padding: 7px 10px; font-size: 1rem;}
+        .add-pet-form button { background: #388e3c; color: #fff; border: none; padding: 8px 20px; border-radius: 5px; font-size: 1.05rem;}
+        .dashboard-btn-container {
+            margin: 16px 0 32px 10px;
+        }
+        .dashboard-btn {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1.25rem;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(25,118,210,0.13);
+            transition: background 0.2s;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-btn:hover {
+            background: #125a9c;
+        }
+        /* Nuovi stili per scansione */
+        .scan-section {
+            margin-bottom: 19px;
+        }
+        #scan-btn {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 22px;
+            font-size: 1.01rem;
+            margin-bottom: 13px;
+            cursor: pointer;
+        }
+        #scan-btn:hover { background: #13508b; }
+        #scan-results {
+            margin-bottom: 10px;
+            display: none;
+            background: #f3f7fb;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 170px;
+            overflow-y: auto;
+            font-size: 1.03rem;
+        }
+        .device-item {
+            padding: 7px 0;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .device-item:last-child { border-bottom: none; }
+        .device-item:hover { background: #e3edfa; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-btn-container">
+        <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
+            <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+        </form>
+    </div>
+    <div class="container">
+        <h1>I miei animali</h1>
+        {% if pets %}
+        <div class="pets-list">
+            {% for pet in pets %}
+            <div class="pet-card">
+                <h2>{{ pet['name']|capitalize }}</h2>
+                <div class="pet-info">
+                    Proprietario: {{ user['username'] }}<br>
+                    MAC Address: {{ pet.get('mac_address', '-') }}<br>
+                    Bluetooth Name: {{ pet.get('bt_name', '-') }}
+                </div>
+                <div class="pet-actions">
+                    <form method="get" action="{{ url_for('edit_pet', pet_id=pet['_id']) }}" style="display:inline;">
+                        <button class="edit" type="submit">Modifica</button>
+                    </form>
+                    <form method="post" action="{{ url_for('delete_pet', pet_id=pet['_id']) }}" style="display:inline;">
+                        <button class="delete" type="submit" onclick="return confirm('Sei sicuro di voler eliminare questo animale?')">Elimina</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+            <div>Nessun animale registrato.</div>
+        {% endif %}
+
+        <form class="add-pet-form" method="post" action="{{ url_for('add_pet') }}">
+            <h3>Aggiungi nuovo animale</h3>
+            <div class="scan-section">
+                <button type="button" id="scan-btn">🔎 Scansiona dispositivi</button>
+                <div id="scan-results"></div>
+            </div>
+            <input type="text" name="pet_name" placeholder="Nome Pet" required>
+            <input type="text" name="mac_address" placeholder="MAC Address" id="mac_address" required>
+            <input type="text" name="bt_name" placeholder="Bluetooth Name" id="bt_name" required>
+            <button type="submit">Aggiungi</button>
+        </form>
+    </div>
+    <script>
+        // --- WebSocket BLE Scan ---
+        let ws;
+        function ensureWS() {
+            if (ws && (ws.readyState === 1 || ws.readyState === 0)) return;
+            let resultsDiv = document.getElementById('scan-results');
+            document.getElementById('scan-results').style.display = 'block';
+            resultsDiv.innerHTML = "Connessione al server BLE...";
+            // Sostituisci con il vero IP se non è localhost!
+            ws = new WebSocket("ws://localhost:8765/");
+            ws.onopen = () => {
+                resultsDiv.innerHTML = "Connesso. Premi di nuovo per scansionare.";
+            };
+            ws.onclose = () => {
+                resultsDiv.innerHTML = "Connessione WebSocket chiusa";
+            };
+            ws.onerror = () => {
+                resultsDiv.innerHTML = "Errore WebSocket";
+            };
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "ble_scan_result" && data.devices) {
+                        resultsDiv.style.display = 'block';
+                        resultsDiv.innerHTML = '';
+                        const devices = data.devices || [];
+                        if (devices.length === 0) {
+                            resultsDiv.innerHTML = 'Nessun dispositivo trovato.';
+                            return;
+                        }
+                        devices.forEach(dev => {
+                            let div = document.createElement('div');
+                            div.className = 'device-item';
+                            div.textContent = (dev.name || '(Sconosciuto)') + ' — ' + dev.mac;
+                            div.onclick = function() {
+                                document.getElementById('mac_address').value = dev.mac;
+                                document.getElementById('bt_name').value = dev.name || '';
+                            };
+                            resultsDiv.appendChild(div);
+                        });
+                    }
+                } catch (e) {
+                    resultsDiv.innerHTML = "Errore dati BLE";
+                }
+            };
+        }
+
+        document.getElementById('scan-btn').onclick = function() {
+            let resultsDiv = document.getElementById('scan-results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = 'Scansione in corso...';
+
+            ensureWS();
+
+            setTimeout(() => {
+                // Manda richiesta di scansione BLE via WebSocket
+                if (ws && ws.readyState === 1) {
+                    ws.send(JSON.stringify({ type: "scan_ble" }));
+                } else if (ws && ws.readyState === 0) {
+                    // Non ancora connesso, riprova tra poco!
+                    resultsDiv.innerHTML = "Attendere connessione WebSocket...";
+                } else {
+                    resultsDiv.innerHTML = "WebSocket non connesso";
+                }
+            }, 300); // Attendi leggermente se serve la connessione
+        };
+    </script>
+</body>
+</html>

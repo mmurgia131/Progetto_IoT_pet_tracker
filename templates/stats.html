@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Statistiche per {{ pet.name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h2>Statistiche per {{ pet.name }}</h2>
+  <p>Punti registrati: {{ stats.n_points }}</p>
+  <p>Distanza totale percorsa: {{ stats.total_distance }} km</p>
+  <canvas id="chart_dist"></canvas>
+  <script>
+    const ctx = document.getElementById('chart_dist').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ timestamps|tojson }},
+            datasets: [{
+                label: 'Distanza (metri)',
+                data: {{ distances|tojson }},
+                borderColor: 'blue',
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { title: { display: true, text: "Timestamp" }},
+                y: { title: { display: true, text: "Metri" }}
+            }
+        }
+    });
+  </script>
+</body>
+</html>

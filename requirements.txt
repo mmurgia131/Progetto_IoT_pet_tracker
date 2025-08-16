@@ -1,0 +1,13 @@
+flask
+flask-session
+flask-socketio
+eventlet
+pymongo
+python-dotenv
+opencv-python
+pillow
+websockets
+requests
+pyTelegramBotAPI
+bcrypt
+paho-mqtt
