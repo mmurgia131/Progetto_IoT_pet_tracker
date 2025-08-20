@@ -18,40 +18,34 @@
       overflow: hidden;
       font-family: inherit;
     }
+    /* Bottone grande come in dashboard_pet */
     .dashboard-btn-container {
-      width: 100vw;
-      padding: 18px 0 10px 0;
-      margin: 0;
-      background: transparent;
-      display: flex;
-      justify-content: center;
-      position: relative;
-      z-index: 1000;
+      margin: 16px 0 32px 10px;
     }
     .dashboard-btn {
-      width: 98vw;
-      max-width: 99vw;
-      background: #1e7dde;
+      background: #1976d2;
       color: #fff;
       border: none;
       border-radius: 12px;
-      padding: 18px 0;
-      font-size: 2rem;
+      padding: 16px 0;
+      font-size: 1.5rem;
       font-family: inherit;
       cursor: pointer;
-      box-shadow: 0 2px 8px #e3eaf3;
+      box-shadow: 0 2px 8px rgba(25,118,210,0.13);
       transition: background 0.2s;
       font-weight: 500;
+      width: calc(100% - 24px);
       display: block;
       text-align: left;
-      text-indent: 32px;
+      padding-left: 24px;
+      margin: 0 auto;
     }
     .dashboard-btn:hover {
       background: #125a9c;
     }
     .map-title {
       position: absolute;
-      top: 72px;
+      top: 90px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 1001;
@@ -66,39 +60,40 @@
     }
     #map {
       position: absolute;
-      top: 120px;
+      top: 150px;
       left: 0;
       width: 100vw;
-      height: calc(100vh - 120px);
+      height: calc(100vh - 150px);
       z-index: 1;
     }
     @media (max-width: 600px) {
       .dashboard-btn {
         font-size: 1.1rem;
-        padding: 10px 0;
+        padding: 12px 0;
         border-radius: 8px;
         text-indent: 18px;
+        width: calc(100% - 12px);
+        padding-left: 12px;
       }
       .map-title {
         font-size: 1.1rem;
         padding: 5px 12px;
         border-radius: 6px;
-        top: 58px;
+        top: 110px;
       }
       #map {
-        top: 94px;
-        height: calc(100vh - 94px);
+        top: 140px;
+        height: calc(100vh - 140px);
       }
     }
   </style>
 </head>
 <body>
   <div class="dashboard-btn-container">
-        <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
-            <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
-        </form>
+    <form method="get" action="{{ url_for('dashboard') }}">
+      <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+    </form>
   </div>
-  <div class="map-title">Posizione attuale del Pet</div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>

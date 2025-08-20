@@ -45,7 +45,7 @@
             margin-top: 20px;
             box-shadow: 0 2px 16px #e3eaf3;
             background: #e3eaf3;
-            display: none; /* Nascondi l'immagine quando non c'è streaming */
+            display: none;
         }
         .controls {
             margin-top: 22px;
@@ -64,12 +64,16 @@
             transition: background 0.2s;
             font-weight: 500;
         }
-        button.control.stop {
+        button.control.streaming-on {
             background: #d32f2f;
+            color: #fff;
         }
         button.control.flash-on {
             background: #FFD600;
             color: #333;
+        }
+        button.control.buzzer-on {
+            background: #43a047;
         }
         #status {
             margin-top: 24px;
@@ -91,22 +95,24 @@
         </form>
     </div>
     <div class="container">
-        <h1>🐾 Streaming Pet Tracker</h1>
+        <h1>🐾 <span style="color:#1976d2">Streaming Pet Tracker</span></h1>
         <div class="controls">
-            <button id="streamBtn" class="control stop">Blocca Streaming</button>
+            <button id="streamBtn" class="control">Attiva Streaming</button>
             <button id="flashBtn" class="control">Accendi Flash</button>
+            <button id="buzzerBtn" class="control">Attiva Buzzer</button>
         </div>
         <img id="cam" width="420" style="display:none" alt="">
         <div id="status"></div>
         <div id="disconnected-message" style="display:none;">
             🚫 <b>Streaming interrotto.</b><br>
-            Premi "<b>Riattiva Streaming</b>" per continuare a guardare il tuo pet!
+            Premi "<b>Attiva Streaming</b>" per continuare a guardare il tuo pet!
         </div>
     </div>
     <script>
         let ws = null;
-        let streamingOn = true;
+        let streamingOn = false;
         let flashOn = false;
+        let buzzerOn = false;
 
         function connectWS() {
             ws = new WebSocket("ws://172.20.10.4:8765"); // Cambia IP se serve
@@ -135,15 +141,14 @@
             };
         }
 
-        connectWS();
+        // Ingresso pagina: streaming OFF, bottone blu "Attiva Streaming"
 
-        // Pulsante streaming
         document.getElementById('streamBtn').onclick = function() {
             const discMsg = document.getElementById('disconnected-message');
             if (streamingOn) {
                 ws.close();
-                this.textContent = "Riattiva Streaming";
-                this.classList.remove("stop");
+                this.textContent = "Attiva Streaming";
+                this.classList.remove("streaming-on");
                 streamingOn = false;
                 document.getElementById("cam").src = "";
                 document.getElementById("cam").style.display = "none";
@@ -152,7 +157,7 @@
             } else {
                 connectWS();
                 this.textContent = "Blocca Streaming";
-                this.classList.add("stop");
+                this.classList.add("streaming-on");
                 streamingOn = true;
                 discMsg.style.display = "none";
             }
@@ -176,6 +181,31 @@
             } else {
                 this.classList.remove("flash-on");
             }
+        };
+
+        // Pulsante Buzzer via MQTT (POST al backend)
+        document.getElementById('buzzerBtn').onclick = function() {
+            const action = buzzerOn ? "off" : "on";
+            fetch('{{ url_for("buzzer") }}', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: action })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.success){
+                    buzzerOn = !buzzerOn;
+                    this.textContent = buzzerOn ? "Disattiva Buzzer" : "Attiva Buzzer";
+                    if (buzzerOn) {
+                        this.classList.add("buzzer-on");
+                    } else {
+                        this.classList.remove("buzzer-on");
+                    }
+                } else {
+                    alert("Errore attivazione buzzer");
+                }
+            })
+            .catch(() => alert("Errore attivazione buzzer"));
         };
     </script>
 </body>

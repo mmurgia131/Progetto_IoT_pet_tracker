@@ -1,37 +1,148 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <title>Statistiche per {{ pet.name }}</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <title>Pet Movement Statistics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { background: #f8f9fa;}
+        .centered-block { background: #fff; border-radius: 16px; box-shadow: 0 2px 18px #e6eaf2; margin: 38px auto 0 auto; max-width: 90vw; width: 95%; padding: 32px 28px 36px 28px; text-align: center; }
+        h2 { color: #222; font-size: 2.6rem; margin-bottom: 18px; font-weight: 700; letter-spacing: 1px;}
+        .legend span { margin: 0 18px; font-weight: 600; vertical-align: middle; }
+        .leg-green { color: #49c24b;}
+        .leg-red { color: #e65c5c;}
+        .leg-azzurro { color: #53c7c3;}
+        .leg-orange { color: #ffa500;}
+        .leg-gray { color: #bdbdbd;}
+        .stats-summary { display: flex; justify-content: center; gap: 18px; margin: 20px 0 28px 0; flex-wrap: wrap;}
+        .stats-summary .stat { background: #f4faff; border-radius: 10px; box-shadow: 0 2px 12px #e7eaf0; padding: 12px 12px; font-size: 1.05rem; min-width: 120px; font-weight: 600; color: #1976d2; text-align: center; border: 2px solid #e7f1fb;}
+        .heatmap-table { margin: 30px auto 20px auto; }
+        .heatmap-row { display: flex; align-items: center; margin-bottom: 12px;}
+        .heatmap-label { min-width: 160px; text-align: right; margin-right: 8px; font-weight: 600; color: #2d2d2d;}
+        .heatmap-block { width: 22px; height: 22px; border-radius: 4px; margin: 1px; border: 1px solid #e3e9ee; display: inline-block; cursor: pointer; }
+        .heatmap-block:hover { box-shadow: 0 0 0 2px #1976d2; z-index: 2; }
+        .heatmap-hours { display: flex; flex-direction: row; margin-top: 7px; justify-content: center;}
+        .heatmap-hours span { display: inline-block; min-width: 36px; font-size: 1em; color: #222; }
+        .zoom-label { margin-right: 8px; font-weight: 500;}
+        .zoom-slider { width: 140px; vertical-align: middle;}
+        .period-select, .date-select { font-size: 1.09em; padding: 4px 6px; border-radius: 5px; border: 1px solid #bdbdbd; margin-right: 8px;}
+        .back-button {
+            display: inline-block;
+            margin: 24px 0 0 32px;
+            padding: 8px 22px;
+            border: none;
+            border-radius: 7px;
+            background: #1976d2;
+            color: #fff;
+            font-size: 1.13em;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px #e1eafc;
+            transition: background 0.2s;
+            position: relative;
+            left: 0;
+            top: 0;
+        }
+        .back-button:hover {
+            background: #1356a2;
+        }
+        @media (max-width: 900px) {
+            .centered-block { padding: 13px 2vw 18px 2vw;}
+            .stats-summary { gap: 8px;}
+            .heatmap-block { width: 13px; height: 13px;}
+            .heatmap-label { min-width: 60px; font-size: 0.9em;}
+            .back-button { margin: 14px 0 0 8px; font-size: 1em;}
+        }
+    </style>
+    <script>
+    function updateGranularity(val) {
+        let gran = "hour";
+        if(val == 2) gran = "10min";
+        if(val == 3) gran = "minute";
+        let url = new URL(window.location.href);
+        url.searchParams.set('gran', gran);
+        window.location.href = url.toString();
+    }
+    function updatePeriod() {
+        let period = document.getElementById('period-select').value;
+        let url = new URL(window.location.href);
+        url.searchParams.set('period', period);
+        window.location.href = url.toString();
+    }
+    function updateDate() {
+        let data = document.getElementById('date-select').value;
+        let url = new URL(window.location.href);
+        url.searchParams.set('date', data);
+        window.location.href = url.toString();
+    }
+    function goBack() {
+        window.history.back();
+    }
+    </script>
 </head>
 <body>
-  <h2>Statistiche per {{ pet.name }}</h2>
-  <p>Punti registrati: {{ stats.n_points }}</p>
-  <p>Distanza totale percorsa: {{ stats.total_distance }} km</p>
-  <canvas id="chart_dist"></canvas>
-  <script>
-    const ctx = document.getElementById('chart_dist').getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: {{ timestamps|tojson }},
-            datasets: [{
-                label: 'Distanza (metri)',
-                data: {{ distances|tojson }},
-                borderColor: 'blue',
-                fill: false
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                x: { title: { display: true, text: "Timestamp" }},
-                y: { title: { display: true, text: "Metri" }}
-            }
-        }
-    });
-  </script>
+    <!-- Pulsante FUORI dal blocco principale, in alto a sinistra -->
+    <button class="back-button" onclick="goBack()">&#8592; Torna indietro</button>
+    <div class="centered-block">
+        <h2>Pet Movement Statistics</h2>
+        <div class="legend" style="margin-bottom:18px;">
+            <span class="leg-green">&#9632; Zona Interna Consentita</span>
+            <span class="leg-red">&#9632; Zona Interna NON Consentita</span>
+            <span class="leg-azzurro">&#9632; Zona Esterna Consentita</span>
+            <span class="leg-orange">&#9632; Zona Esterna NON Consentita</span>
+            <span class="leg-gray">&#9632; Nessun dato</span>
+        </div>
+        <form style="margin-bottom:18px;display:flex;justify-content:center;align-items:center;gap:10px;">
+            <label for="period-select">Seleziona periodo:</label>
+            <select id="period-select" class="period-select" name="period" onchange="updatePeriod()">
+                <option value="day" {% if period=='day' %}selected{% endif %}>Un Giorno</option>
+                <option value="week" {% if period=='week' %}selected{% endif %}>Una Settimana</option>
+                <option value="month" {% if period=='month' %}selected{% endif %}>Un Mese</option>
+            </select>
+            <label for="date-select" style="margin-left:18px;">Giorno:</label>
+            <input type="date" id="date-select" class="date-select" name="date" value="{{ today }}" onchange="updateDate()">
+        </form>
+        <div class="stats-summary">
+            <div class="stat">Movimenti totali: {{ stats.n_points }}</div>
+            <div class="stat">Top Room: {{ stats.top_room }}</div>
+            <div class="stat">Ultimo movimento: {{ stats.last_movement }}</div>
+            <div class="stat">Ingressi non consentiti: {{ stats.restricted_entries }}</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px;">
+            <span class="zoom-label">Zoom:</span>
+            <input type="range" min="1" max="3" step="1"
+                   value="{% if granularity=='hour' %}1{% elif granularity=='10min' %}2{% else %}3{% endif %}"
+                   class="zoom-slider"
+                   onchange="updateGranularity(this.value)">
+        </div>
+        <div class="heatmap-table">
+            {% for row in heatmap_matrix %}
+                <div class="heatmap-row">
+                    <span class="heatmap-label">{{ row.stanza }}</span>
+                    {% for blocchi_giorno in row.blocchi %}
+                        {% for block in blocchi_giorno %}
+                            <span class="heatmap-block" style="background:{{ block.colore }};" title="{{ block.ora }}"></span>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+        <div class="heatmap-hours">
+            {% set step_minutes = step.seconds // 60 %}
+            {% if step_minutes >= 60 %}
+                {% for h in range(24) %}
+                    <span>{{ "%02d"|format(h) }}</span>
+                {% endfor %}
+            {% elif step_minutes == 10 %}
+                {% for h in range(24) %}
+                    <span>{{ "%02d"|format(h) }}</span>
+                {% endfor %}
+            {% elif step_minutes == 1 %}
+                {% for h in range(24) %}
+                    <span>{{ "%02d"|format(h) }}</span>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
 </body>
 </html>

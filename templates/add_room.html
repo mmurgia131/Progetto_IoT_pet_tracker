@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Aggiungi nuova stanza</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    .main {
+      max-width: 80vw;
+      margin: 40px auto;
+      padding: 32px;
+    }
+  </style>
+</head>
+<body>
+  <div class="main">
+    <h1 class="mb-4 fw-bold">Aggiungi nuova stanza</h1>
+    <form method="post">
+      <div class="mb-3">
+        <label for="room_name" class="form-label">Nome stanza</label>
+        <input type="text" class="form-control" id="room_name" name="room_name" required>
+      </div>
+      <div class="mb-3">
+        <label for="mac_address" class="form-label">MAC ancora BT</label>
+        <div class="input-group">
+          <input type="text" class="form-control" id="mac_address" name="mac_address" required>
+          <button type="button" class="btn btn-outline-secondary" id="btn-scan" type="button">Scansiona</button>
+        </div>
+        <div id="bt-results" class="mt-2"></div>
+      </div>
+      <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" value="1" id="allowed" name="allowed" checked>
+        <label class="form-check-label" for="allowed">
+          Il pet può stare in questa stanza
+        </label>
+      </div>
+      <button type="submit" class="btn btn-success me-2">Salva</button>
+      <a href="{{ url_for('config_area_main') }}" class="btn btn-secondary">Annulla</a>
+    </form>
+  </div>
+  <script>
+    document.getElementById("btn-scan").onclick = function() {
+      // Richiedi all'ESP32 di scansionare tramite WebSocket (se usi WebSocket puoi inserirlo qui)
+      // Altrimenti, puoi fare polling via HTTP per recuperare il risultato BLE
+      fetch("/scan_ble_result")
+        .then(r => r.json())
+        .then(data => {
+          let results = document.getElementById('bt-results');
+          results.innerHTML = '';
+          if(data.devices && data.devices.length) {
+            data.devices.forEach(function(device) {
+              let btn = document.createElement('button');
+              btn.className = 'btn btn-sm btn-outline-primary m-1';
+              btn.textContent = (device.name ? device.name + " " : "") + device.mac;
+              btn.onclick = function() {
+                document.getElementById('mac_address').value = device.mac;
+              };
+              results.appendChild(btn);
+            });
+          } else {
+            results.innerHTML = "<small>Nessun dispositivo trovato. Premi di nuovo dopo aver avviato una scansione dalla pagina principale.</small>";
+          }
+        });
+    };
+  </script>
+</body>
+</html>

@@ -32,6 +32,7 @@ class PetTrackerDB:
             self.positions.create_index([("pet_id", ASCENDING), ("timestamp", DESCENDING)])
             self.rooms.create_index([("owner_id", ASCENDING)])
             self.perimeters.create_index([("pet_id", ASCENDING)])
+            self.perimeters.create_index([("key", ASCENDING)])
         except Exception as e:
             print(f"⚠️ Errore nella creazione degli indici: {e}")
 
@@ -73,40 +74,73 @@ class PetTrackerDB:
     def get_pet_by_id(self, pet_id):
         return self.pets.find_one({"_id": ObjectId(pet_id)})
 
-    def update_pet(self, pet_id, name, mac_address=None, bt_name=None):
-        update_fields = {"name": name}
+
+    def update_pet(self, pet_id, name=None, mac_address=None, bt_name=None, temp_min=None, temp_max=None):
+        update_fields = {}
+        if name is not None:
+            update_fields["name"] = name
         if mac_address is not None:
             update_fields["mac_address"] = mac_address
         if bt_name is not None:
             update_fields["bt_name"] = bt_name
-        self.pets.update_one({"_id": ObjectId(pet_id)}, {"$set": update_fields})
+        if temp_min is not None:
+            update_fields["temp_min"] = temp_min
+        if temp_max is not None:
+            update_fields["temp_max"] = temp_max
+        if update_fields:
+            self.pets.update_one({"_id": ObjectId(pet_id)}, {"$set": update_fields})
 
     def delete_pet(self, pet_id):
         self.pets.delete_one({"_id": ObjectId(pet_id)})
 
-    # --- ROOMS ---
-    def add_room(self, owner_id, name, coords=None):
+    # --- ROOMS (globali, per configurazione area/stanze) ---
+    def get_rooms(self):
+        """Restituisce tutte le stanze (ancore BT)."""
+        return list(self.rooms.find({}))
+
+    def add_room(self, name, mac_address, allowed):
         return self.rooms.insert_one({
-            "owner_id": str(owner_id),
             "name": name,
-            "coords": coords or []
+            "mac_address": mac_address,
+            "allowed": allowed
         }).inserted_id
 
-    def get_rooms_for_user(self, user_id):
-        return list(self.rooms.find({"owner_id": str(user_id)}))
+    def get_room_by_id(self, room_id):
+        return self.rooms.find_one({"_id": ObjectId(room_id)})
 
-    # --- PERIMETRO ---
-    def set_perimeter(self, pet_id, area_coords):
+    def update_room(self, room_id, name, mac_address, allowed):
+        update_data = {"name": name, "mac_address": mac_address, "allowed": allowed}
+        self.rooms.update_one({"_id": ObjectId(room_id)}, {"$set": update_data})
+
+    def delete_room(self, room_id):
+        self.rooms.delete_one({"_id": ObjectId(room_id)})
+
+    def update_room_access(self, room_id, allowed):
+        from bson import ObjectId
+        self.rooms.update_one(
+            {"_id": ObjectId(room_id)},
+            {"$set": {"allowed": allowed}}
+        )
+    # --- PERIMETRO (globale per tutti i pet) ---
+    def get_perimeter_center(self):
+        perim = self.perimeters.find_one({"key": "global"})
+        if perim and "center" in perim:
+            return tuple(perim["center"])
+        return None
+
+    def get_perimeter_radius(self):
+        perim = self.perimeters.find_one({"key": "global"})
+        if perim and "radius" in perim:
+            return perim["radius"]
+        return None
+
+    def save_perimeter(self, center, radius):
         self.perimeters.update_one(
-            {"pet_id": str(pet_id)},
-            {"$set": {"area": area_coords}},
+            {"key": "global"},
+            {"$set": {"center": center, "radius": radius}},
             upsert=True
         )
 
-    def get_perimeter_for_pet(self, pet_id):
-        return self.perimeters.find_one({"pet_id": str(pet_id)})
-
-    # --- ALLOWED ROOMS per pet ---
     def set_pet_allowed_rooms(self, pet_id, room_ids):
         self.pets.update_one(
             {"_id": ObjectId(pet_id)},
@@ -123,6 +157,24 @@ class PetTrackerDB:
             "lon": lon,
             "timestamp": timestamp
         })
+
+    def save_position(self, pet_id, entry_type, timestamp=None, **kwargs):
+        from datetime import datetime, timezone
+        if not timestamp:
+            timestamp = datetime.now(timezone.utc)
+        record = {
+            "pet_id": str(pet_id),
+            "entry_type": entry_type,
+            "timestamp": timestamp
+        }
+        record.update(kwargs)
+        print("=== SALVATAGGIO POSIZIONE ===")
+        print(record)
+        try:
+            self.positions.insert_one(record)
+            print("=== SALVATAGGIO OK ===")
+        except Exception as e:
+            print("ERRORE SALVATAGGIO:", e)
 
     def get_last_position(self, pet_id):
         return self.positions.find_one(
@@ -142,7 +194,15 @@ class PetTrackerDB:
         file = self.gridfs_images.get(ObjectId(image_id))
         return file.read(), file.filename
 
-    # --- TOOL UTILI ---
+    def save_env_data(self, pet_id, temp, hum, timestamp):
+        self.db.envdata.insert_one({
+            "pet_id": str(pet_id),
+            "temp": temp,
+            "hum": hum,
+            "timestamp": timestamp
+        })
+    def get_latest_env(self, pet_id):
+        return self.db.envdata.find_one({"pet_id": str(pet_id)}, sort=[("timestamp", -1)])
     @staticmethod
     def is_inside_perimeter(lat, lon, area):
         try:

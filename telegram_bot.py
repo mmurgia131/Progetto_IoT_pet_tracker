@@ -6,9 +6,9 @@ import os
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8422442152:AAGNoi5GfcNuaObdO5vttkdgQFTDIpU2L9k")
 CHAT_IDS_FILE = "chat_ids.json"
-PERIMETER_NOTIFICATION_COOLDOWN = 120  # secondi
+PERIMETER_NOTIFICATION_COOLDOWN = 90  # secondi
 
-last_perimeter_notification = 0
+last_notification_time = 0
 
 def load_chat_ids():
     try:
@@ -47,17 +47,43 @@ def send_to_all_chats(msg):
         except Exception as e:
             print(f"[BOT] Errore invio a {chat_id}: {e}")
 
-def notify_pet_outside_area(gps=None, cooldown=PERIMETER_NOTIFICATION_COOLDOWN):
-    global last_perimeter_notification
-    now = time.time()
-    if now - last_perimeter_notification < cooldown:
-        print(f"[BOT] Cooldown attivo per notifica fuori perimetro ({now - last_perimeter_notification:.1f}s fa)")
-        return
-    last_perimeter_notification = now
-    gps_info = f"\nPosizione: {gps}" if gps else ""
-    msg = (
-        "🚨 <b>Il tuo animale è uscito dall'area consentita!</b>"
-        f"{gps_info}\n"
-        "Controlla la posizione e richiama il pet nell'area stabilita."
-    )
-    threading.Thread(target=send_to_all_chats, args=(msg,), daemon=True).start()
+def notify_events(is_outside, temp_high, temp_low, gps=None, temp_value=None, temp_min=None, temp_max=None):
+    global last_notification_time  # aggiungi questa riga!
+    messaggio = None
+    if is_outside:
+        if temp_high:
+            messaggio = (
+                f"Il pet si trova fuori dall'area consentita "
+                f"e la temperatura rilevata ({temp_value}°C) è sopra la soglia massima ({temp_max}°C).\n"
+                f"Ultima posizione: {gps or 'Posizione sconosciuta'}"
+            )
+        elif temp_low:
+            messaggio = (
+                f"Il pet si trova fuori dall'area consentita "
+                f"e la temperatura rilevata ({temp_value}°C) è sotto la soglia minima ({temp_min}°C).\n"
+                f"Ultima posizione: {gps or 'Posizione sconosciuta'}"
+            )
+        else:
+            messaggio = (
+                f"Il pet si trova fuori dall'area consentita!\n"
+                f"Ultima posizione: {gps or 'Posizione sconosciuta'}"
+            )
+    else:
+        if temp_high:
+            messaggio = (
+                f"Attenzione! Temperatura sopra la soglia: "
+                f"{temp_value}°C (soglia max {temp_max}°C)."
+            )
+        elif temp_low:
+            messaggio = (
+                f"Attenzione! Temperatura sotto la soglia: "
+                f"{temp_value}°C (soglia min {temp_min}°C)."
+            )
+    if messaggio:
+        now = time.time()
+        if now - last_notification_time >= PERIMETER_NOTIFICATION_COOLDOWN:
+            print("[TELEGRAM] Invio notifica:", messaggio)
+            threading.Thread(target=send_to_all_chats, args=(messaggio,), daemon=True).start()
+            last_notification_time = now
+        else:
+            print("[TELEGRAM] Notifica ignorata per cooldown")

@@ -12,32 +12,50 @@
       background-color: #f5f5f5;
       color: #222;
     }
-    .header {
+    .dashboard-btn-container {
+      margin: 16px 0 32px 10px;
+    }
+    .dashboard-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 1.25rem;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(25,118,210,0.13);
+      transition: background 0.2s;
+      font-weight: 500;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 24px 48px;
+    }
+    .dashboard-btn:hover {
+      background: #125a9c;
+    }
+    .header-centered {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 0 22px 0;
+      background: #fff;
       border-bottom: 1px solid #e0e0e0;
-      background-color: #fff;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      margin-bottom: 0;
     }
-    .left-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+    .logo-small {
+      height: 48px;
+      width: 48px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px #bbb;
+      margin-bottom: 7px;
     }
-    .logo {
-      height: 54px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px #bbb;
-    }
-    .title {
-      font-size: 2rem;
+    .title-centered {
+      font-size: 2.1rem;
       font-weight: 700;
       color: #1976d2;
-      margin-left: 6px;
+      margin: 0;
+      text-align: center;
     }
     .main {
       padding: 44px 5vw 60px 5vw;
@@ -95,17 +113,23 @@
       background-color: #1976d2;
       color: white;
     }
-    .back-link {
-      margin-top: 28px;
-      color: #1976d2;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 1.07rem;
-      transition: color 0.2s;
+    /* Box ambiente */
+    #env-box {
+      margin: 22px 0 12px 0;
+      padding: 18px 30px;
+      background: #e3f1fe;
+      border-radius: 14px;
+      display: inline-block;
+      font-size: 1.13rem;
+      font-weight: 500;
+      color: #1a237e;
+      box-shadow: 0 2px 6px #e2eaf3;
+      min-width: 210px;
+      text-align: center;
     }
-    .back-link:hover {
-      color: #145db2;
-      text-decoration: underline;
+    #env-temp, #env-hum {
+      font-weight: 700;
+      color: #0d47a1;
     }
     @media (max-width: 600px) {
       .main {
@@ -117,18 +141,64 @@
       .card-button {
         min-width: 80vw;
       }
+      #env-box {
+        min-width: 0;
+        padding: 13px 7vw;
+      }
+      .header-centered {
+        padding: 18px 0 12px 0;
+      }
+      .title-centered {
+        font-size: 1.18rem;
+      }
+      .logo-small {
+        height: 35px;
+        width: 35px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="left-header">
-      <img src="{{ url_for('static', filename='pet_tracker_logo.png') }}" alt="Logo Pet Tracker" class="logo">
-      <h1 class="title">Dashboard di {{ pet.name }}</h1>
-    </div>
+  <div class="dashboard-btn-container">
+    <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
+      <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+    </form>
+  </div>
+  <div class="header-centered">
+    <h1 class="title-centered">Dashboard di {{ pet.name }}</h1>
   </div>
   <div class="main">
-    <div class="section-title">Azioni rapide per <b>{{ pet.name }}</b></div>
+
+    <!-- Box ambiente: temperatura / umidità -->
+    <div id="env-box">
+      <strong>Ambiente:</strong>
+      <span id="env-temp">--</span>°C,
+      <span id="env-hum">--</span>%
+    </div>
+    <script>
+      function updateEnvBox() {
+        fetch('/get_latest_env/{{ pet._id }}')
+          .then(r => r.json())
+          .then(env => {
+            document.getElementById('env-temp').textContent = (env.temp !== null && !isNaN(env.temp)) ? env.temp.toFixed(1) : '--';
+            document.getElementById('env-hum').textContent = (env.hum !== null && !isNaN(env.hum)) ? env.hum.toFixed(1) : '--';
+          });
+      }
+      // Aggiorna ogni 20 secondi
+      updateEnvBox();
+      setInterval(updateEnvBox, 20000);
+    </script>
+        <div class="pet-details">
+      <!-- Form per impostare le soglie temperatura -->
+      <form method="post" action="{{ url_for('update_temp_thresholds', pet_id=pet._id) }}" style="margin-top:22px;margin-bottom:0;">
+        <label for="temp_min"><b>Soglia minima temperatura (°C):</b></label>
+        <input type="number" step="0.1" name="temp_min" id="temp_min" value="{{ pet.temp_min if pet.temp_min is not none else '' }}" style="margin-right:18px; width:80px;">
+        <label for="temp_max"><b>Soglia massima temperatura (°C):</b></label>
+        <input type="number" step="0.1" name="temp_max" id="temp_max" value="{{ pet.temp_max if pet.temp_max is not none else '' }}" style="margin-right:18px; width:80px;">
+        <button type="submit" class="dashboard-btn" style="padding:6px 20px;font-size:1rem;margin-left:8px;">Salva soglie</button>
+      </form>
+    </div>
+
     <div class="pet-details">
       <!-- Qui puoi mostrare info aggiuntive sul pet, opzionale -->
       <!-- Esempio:
@@ -150,7 +220,6 @@
         </button>
       </a>
     </div>
-    <a href="{{ url_for('dashboard') }}" class="back-link">← Torna alla selezione del pet</a>
   </div>
 </body>
 </html>
