@@ -271,7 +271,7 @@
         <h3>Aggiungi nuova stanza</h3>
         <div class="scan-section">
           <button type="button" id="scan-btn">
-            <span style="font-size:1.15em;">🔍</span> Scansiona ancore BT
+            <span style="font-size:1.15em;">🔍</span> Mostra ancore disponibili
           </button>
           <div id="scan-results"></div>
         </div>
@@ -396,66 +396,30 @@
         });
     }
 
-    // --- WebSocket BLE Scan ---
-    let ws;
-    function ensureWS() {
-        if (ws && (ws.readyState === 1 || ws.readyState === 0)) return;
-        let resultsDiv = document.getElementById('scan-results');
-        document.getElementById('scan-results').style.display = 'block';
-        resultsDiv.innerHTML = "Connessione al server BLE...";
-        ws = new WebSocket("ws://localhost:8765/");
-        ws.onopen = () => {
-            resultsDiv.innerHTML = "Connesso. Premi di nuovo per scansionare.";
-        };
-        ws.onclose = () => {
-            resultsDiv.innerHTML = "Connessione WebSocket chiusa";
-        };
-        ws.onerror = () => {
-            resultsDiv.innerHTML = "Errore WebSocket";
-        };
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === "ble_scan_result" && data.devices) {
-                    resultsDiv.style.display = 'block';
-                    resultsDiv.innerHTML = '';
-                    const devices = data.devices || [];
-                    if (devices.length === 0) {
-                        resultsDiv.innerHTML = 'Nessun dispositivo trovato.';
-                        return;
-                    }
-                    devices.forEach(dev => {
-                        let div = document.createElement('div');
-                        div.className = 'device-item';
-                        div.textContent = (dev.name || '(Sconosciuto)') + ' — ' + dev.mac;
-                        div.onclick = function() {
-                            document.getElementById('mac_address').value = dev.mac;
-                        };
-                        resultsDiv.appendChild(div);
-                    });
-                }
-            } catch (e) {
-                resultsDiv.innerHTML = "Errore dati BLE";
-            }
-        };
-    }
-
+    // --- Mostra ancore disponibili tramite AJAX ---
     document.getElementById('scan-btn').onclick = function() {
-        let resultsDiv = document.getElementById('scan-results');
-        resultsDiv.style.display = 'block';
-        resultsDiv.innerHTML = 'Scansione in corso...';
+      let resultsDiv = document.getElementById('scan-results');
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = 'Caricamento ancore...';
 
-        ensureWS();
-
-        setTimeout(() => {
-            if (ws && ws.readyState === 1) {
-                ws.send(JSON.stringify({ type: "scan_ble" }));
-            } else if (ws && ws.readyState === 0) {
-                resultsDiv.innerHTML = "Attendere connessione WebSocket...";
-            } else {
-                resultsDiv.innerHTML = "WebSocket non connesso";
-            }
-        }, 300);
+      fetch('/anchors_online')
+        .then(r => r.json())
+        .then(data => {
+          resultsDiv.innerHTML = '';
+          if (data.anchors && data.anchors.length) {
+            data.anchors.forEach(anchor => {
+              let btn = document.createElement('button');
+              btn.className = 'btn btn-sm btn-outline-primary m-1';
+              btn.textContent = anchor.anchor_id + " — " + anchor.mac_address;
+              btn.onclick = function() {
+                document.getElementById('mac_address').value = anchor.mac_address;
+              };
+              resultsDiv.appendChild(btn);
+            });
+          } else {
+            resultsDiv.innerHTML = "<small>Nessuna ancora trovata. Assicurati che le ancore siano accese e collegate alla rete.</small>";
+          }
+        });
     };
 
     // --- Accesso consentito: forza valore submit (0/1) ---

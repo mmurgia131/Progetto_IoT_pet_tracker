@@ -40,39 +40,28 @@
         .dashboard-btn:hover {
             background: #125a9c;
         }
-        /* Nuovi stili per scansione */
-        .scan-section {
-            margin-bottom: 19px;
+        /* Nuovo: elenco dispositivi BLE visti dalle ancore */
+        #detected-pets-list {
+            margin-bottom: 14px;
+            padding: 10px 0;
         }
-        #scan-btn {
+        .detected-pet-btn {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #b3d4fc;
+            border-radius: 7px;
+            margin: 4px 8px 4px 0;
+            padding: 7px 12px;
+            font-size: 1.03rem;
+            cursor: pointer;
+            display: inline-block;
+            font-weight: 600;
+            transition: background 0.15s, color 0.15s;
+        }
+        .detected-pet-btn:hover {
             background: #1976d2;
             color: #fff;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 22px;
-            font-size: 1.01rem;
-            margin-bottom: 13px;
-            cursor: pointer;
         }
-        #scan-btn:hover { background: #13508b; }
-        #scan-results {
-            margin-bottom: 10px;
-            display: none;
-            background: #f3f7fb;
-            padding: 10px;
-            border-radius: 6px;
-            max-height: 170px;
-            overflow-y: auto;
-            font-size: 1.03rem;
-        }
-        .device-item {
-            padding: 7px 0;
-            border-bottom: 1px solid #e0e0e0;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-        .device-item:last-child { border-bottom: none; }
-        .device-item:hover { background: #e3edfa; }
     </style>
 </head>
 <body>
@@ -110,9 +99,8 @@
 
         <form class="add-pet-form" method="post" action="{{ url_for('add_pet') }}">
             <h3>Aggiungi nuovo animale</h3>
-            <div class="scan-section">
-                <button type="button" id="scan-btn">🔎 Scansiona dispositivi</button>
-                <div id="scan-results"></div>
+            <div id="detected-pets-list">
+                <!-- Qui vengono mostrati i pet BLE rilevati dalle ancore -->
             </div>
             <input type="text" name="pet_name" placeholder="Nome Pet" required>
             <input type="text" name="mac_address" placeholder="MAC Address" id="mac_address" required>
@@ -121,71 +109,33 @@
         </form>
     </div>
     <script>
-        // --- WebSocket BLE Scan ---
-        let ws;
-        function ensureWS() {
-            if (ws && (ws.readyState === 1 || ws.readyState === 0)) return;
-            let resultsDiv = document.getElementById('scan-results');
-            document.getElementById('scan-results').style.display = 'block';
-            resultsDiv.innerHTML = "Connessione al server BLE...";
-            // Sostituisci con il vero IP se non è localhost!
-            ws = new WebSocket("ws://localhost:8765/");
-            ws.onopen = () => {
-                resultsDiv.innerHTML = "Connesso. Premi di nuovo per scansionare.";
-            };
-            ws.onclose = () => {
-                resultsDiv.innerHTML = "Connessione WebSocket chiusa";
-            };
-            ws.onerror = () => {
-                resultsDiv.innerHTML = "Errore WebSocket";
-            };
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === "ble_scan_result" && data.devices) {
-                        resultsDiv.style.display = 'block';
-                        resultsDiv.innerHTML = '';
-                        const devices = data.devices || [];
-                        if (devices.length === 0) {
-                            resultsDiv.innerHTML = 'Nessun dispositivo trovato.';
-                            return;
-                        }
-                        devices.forEach(dev => {
-                            let div = document.createElement('div');
-                            div.className = 'device-item';
-                            div.textContent = (dev.name || '(Sconosciuto)') + ' — ' + dev.mac;
-                            div.onclick = function() {
-                                document.getElementById('mac_address').value = dev.mac;
-                                document.getElementById('bt_name').value = dev.name || '';
-                            };
-                            resultsDiv.appendChild(div);
-                        });
-                    }
-                } catch (e) {
-                    resultsDiv.innerHTML = "Errore dati BLE";
+        // Recupera la lista dei pet BLE visti dalle ancore (esposta dal backend)
+        function updateDetectedPetsList() {
+            fetch('/detected_pets')
+              .then(r => r.json())
+              .then(data => {
+                let cont = document.getElementById('detected-pets-list');
+                cont.innerHTML = '';
+                if(data.pets && data.pets.length) {
+                    data.pets.forEach(function(dev) {
+                        let btn = document.createElement('button');
+                        btn.className = 'detected-pet-btn';
+                        btn.textContent = (dev.bt_name ? dev.bt_name + " " : "") + dev.mac_address + (dev.rssi ? " (RSSI " + dev.rssi + ")" : "");
+                        btn.onclick = function() {
+                            document.getElementById('mac_address').value = dev.mac_address;
+                            document.getElementById('bt_name').value = dev.bt_name || '';
+                        };
+                        cont.appendChild(btn);
+                    });
+                } else {
+                    cont.innerHTML = "<small>Nessun pet BLE rilevato. Accendi il collare per registrare l'animale.</small>";
                 }
-            };
+              });
         }
 
-        document.getElementById('scan-btn').onclick = function() {
-            let resultsDiv = document.getElementById('scan-results');
-            resultsDiv.style.display = 'block';
-            resultsDiv.innerHTML = 'Scansione in corso...';
-
-            ensureWS();
-
-            setTimeout(() => {
-                // Manda richiesta di scansione BLE via WebSocket
-                if (ws && ws.readyState === 1) {
-                    ws.send(JSON.stringify({ type: "scan_ble" }));
-                } else if (ws && ws.readyState === 0) {
-                    // Non ancora connesso, riprova tra poco!
-                    resultsDiv.innerHTML = "Attendere connessione WebSocket...";
-                } else {
-                    resultsDiv.innerHTML = "WebSocket non connesso";
-                }
-            }, 300); // Attendi leggermente se serve la connessione
-        };
+        // Aggiorna la lista ogni 6 secondi
+        updateDetectedPetsList();
+        setInterval(updateDetectedPetsList, 6000);
     </script>
 </body>
 </html>

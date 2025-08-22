@@ -114,8 +114,14 @@
         let flashOn = false;
         let buzzerOn = false;
 
+        // Usa host dinamico per la WS (così funziona ovunque)
+        function wsUrl() {
+            let proto = window.location.protocol === "https:" ? "wss://" : "ws://";
+            return proto + window.location.hostname + ":8765/";
+        }
+
         function connectWS() {
-            ws = new WebSocket("ws://172.20.10.4:8765"); // Cambia IP se serve
+            ws = new WebSocket(wsUrl());
             ws.onopen = () => {
                 document.getElementById('status').textContent = "";
                 document.getElementById("cam").style.display = "inline-block";
@@ -141,12 +147,11 @@
             };
         }
 
-        // Ingresso pagina: streaming OFF, bottone blu "Attiva Streaming"
-
+        // Avvio pagina: streaming OFF, bottone blu "Attiva Streaming"
         document.getElementById('streamBtn').onclick = function() {
             const discMsg = document.getElementById('disconnected-message');
             if (streamingOn) {
-                ws.close();
+                if (ws) ws.close();
                 this.textContent = "Attiva Streaming";
                 this.classList.remove("streaming-on");
                 streamingOn = false;
@@ -163,7 +168,7 @@
             }
         };
 
-        // Pulsante Flash
+        // Pulsante Flash (via WebSocket, solo se connesso)
         document.getElementById('flashBtn').onclick = function() {
             if (!ws || ws.readyState !== 1) {
                 document.getElementById('status').textContent = "WebSocket non connesso!";

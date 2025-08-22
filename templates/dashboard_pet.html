@@ -113,7 +113,6 @@
       background-color: #1976d2;
       color: white;
     }
-    /* Box ambiente */
     #env-box {
       margin: 22px 0 12px 0;
       padding: 18px 30px;
@@ -188,8 +187,7 @@
       updateEnvBox();
       setInterval(updateEnvBox, 20000);
     </script>
-        <div class="pet-details">
-      <!-- Form per impostare le soglie temperatura -->
+    <div class="pet-details">
       <form method="post" action="{{ url_for('update_temp_thresholds', pet_id=pet._id) }}" style="margin-top:22px;margin-bottom:0;">
         <label for="temp_min"><b>Soglia minima temperatura (°C):</b></label>
         <input type="number" step="0.1" name="temp_min" id="temp_min" value="{{ pet.temp_min if pet.temp_min is not none else '' }}" style="margin-right:18px; width:80px;">
@@ -201,10 +199,6 @@
 
     <div class="pet-details">
       <!-- Qui puoi mostrare info aggiuntive sul pet, opzionale -->
-      <!-- Esempio:
-      <div>MAC Address: {{ pet.mac_address }}</div>
-      <div>Bluetooth: {{ pet.bt_name }}</div>
-      -->
     </div>
     <div class="pet-actions">
       <a href="{{ url_for('camera') }}">
