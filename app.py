@@ -22,7 +22,6 @@ ESP32_CONTROL_PATH = "/control"
 
 MQTT_BROKER = "172.20.10.4"
 MQTT_PORT = 1883
-MQTT_TOPIC = "pettracker/ble_scan"
 MQTT_GPS_TOPIC = "pettracker/gps"
 MQTT_BUZZER_CMD_TOPIC = "pettracker/cmd/buzzer"
 MQTT_ENV_TOPIC = "pettracker/env"
@@ -48,8 +47,6 @@ def is_inside_circle(lat_pet, lon_pet, lat_center, lon_center, radius):
     distanza = haversine(lat_pet, lon_pet, lat_center, lon_center)
     return distanza <= radius
 
-latest_ble_scan = None
-ble_scan_lock = threading.Lock()
 latest_gps = {"lat": None, "lon": None}
 latest_env = {}
 mqtt_client = None
@@ -544,15 +541,6 @@ def utc_to_rome(dt):
 
 app.jinja_env.filters['utc_to_rome'] = utc_to_rome
 
-@app.route('/scan_ble_result')
-@login_required
-def scan_ble_result():
-    with ble_scan_lock:
-        if latest_ble_scan:
-            return jsonify(latest_ble_scan)
-        else:
-            return jsonify({"devices": []})
-
 @app.route("/telegram_webhook", methods=["POST"])
 def telegram_webhook():
     data = request.get_json()
@@ -597,10 +585,6 @@ async def websocket_handler(websocket):
                     for client in connected_clients.copy():
                         if client != websocket and client.close_code is None:
                             await client.send(message)
-                elif data.get("type") == "scan_ble":
-                    for client in connected_clients.copy():
-                        if client != websocket and client.close_code is None:
-                            await client.send(json.dumps({"type": "scan_ble"}))
             except json.JSONDecodeError:
                 print("❌ JSON non valido")
     except Exception as e:
@@ -620,7 +604,6 @@ def start_websocket_server():
 
 def on_mqtt_connect(client, userdata, flags, rc):
     print(f"[MQTT] Connessione: {rc}")
-    client.subscribe(MQTT_TOPIC)
     client.subscribe(MQTT_GPS_TOPIC)
     client.subscribe(MQTT_BUZZER_CMD_TOPIC)
     client.subscribe(MQTT_ENV_TOPIC)
@@ -628,7 +611,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
     client.subscribe("tracker/+/+")
 
 def on_mqtt_message(client, userdata, msg):
-    global main_asyncio_loop, latest_ble_scan, latest_env
+    global main_asyncio_loop, latest_env
     global current_is_outside, current_temp_high, current_temp_low, current_temp_value, current_temp_min, current_temp_max, latest_gps
     try:
         payload = msg.payload.decode()
@@ -665,33 +648,7 @@ def on_mqtt_message(client, userdata, msg):
 
         data = json.loads(payload) if msg.topic not in [MQTT_BUZZER_CMD_TOPIC] else payload
 
-        if msg.topic == MQTT_TOPIC:
-            data = json.loads(payload)
-            data['type'] = 'ble_scan_result'
-            with ble_scan_lock:
-                latest_ble_scan = data
-
-            pet_id = data.get("pet_id", "68a0945af163860973073d68")
-            room_name = data.get("room_name", "Unknown")
-            allowed = data.get("allowed", False)
-            entry_type = "stanza_accessibile" if allowed else "stanza_non_accessibile"
-            mac_address = data.get("mac_address")
-            rssi = data.get("rssi")
-            db.save_position(
-                pet_id=pet_id,
-                room=room_name,
-                entry_type=entry_type,
-                mac_address=mac_address,
-                rssi=rssi,
-                source="ble"
-            )
-
-            if main_asyncio_loop:
-                for ws in connected_clients.copy():
-                    if ws.close_code is None:
-                        asyncio.run_coroutine_threadsafe(ws.send(json.dumps(data)), main_asyncio_loop)
-
-        elif msg.topic == MQTT_GPS_TOPIC:
+        if msg.topic == MQTT_GPS_TOPIC:
             data = json.loads(payload)
             data['type'] = 'gps_update'
             latest_gps['lat'] = data.get('lat')
