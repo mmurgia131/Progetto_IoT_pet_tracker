@@ -5,13 +5,13 @@ from bson import ObjectId
 import bcrypt
 
 class PetTrackerDB:
-    def __init__(self, connection_string="mongodb://localhost:27017/"):
+    def __init__(self, connection_string="mongodb+srv://mariucciamurgia:LHbPpnHsUBC88W7a@cluster0.4wplnch.mongodb.net/"):
         try:
             self.client = MongoClient(connection_string, serverSelectionTimeoutMS=5000)
             self.client.admin.command('ping')
             print("✅ Connessione a MongoDB riuscita!")
 
-            self.db = self.client.pettracker
+            self.db = self.client.PetTracker
             self.users = self.db.users
             self.pets = self.db.pets
             self.positions = self.db.positions
@@ -25,10 +25,20 @@ class PetTrackerDB:
             print(f"❌ Connessione a MongoDB fallita: {e}")
             raise
 
+    # --- Utils ---
+    @staticmethod
+    def _ensure_oid(value):
+        """Restituisce un ObjectId a partire da una stringa o passa attraverso se è già ObjectId."""
+        if isinstance(value, ObjectId):
+            return value
+        return ObjectId(value)
+
     def _setup_indexes(self):
         try:
             self.users.create_index([("username", ASCENDING)], unique=True)
             self.pets.create_index([("owner_id", ASCENDING)])
+            # Consigliato: evitare duplicati MAC
+            self.pets.create_index([("mac_address", ASCENDING)], unique=True, name="uniq_mac_address")
             self.positions.create_index([("pet_id", ASCENDING), ("timestamp", DESCENDING)])
             self.rooms.create_index([("owner_id", ASCENDING)])
             self.perimeters.create_index([("pet_id", ASCENDING)])
@@ -48,7 +58,8 @@ class PetTrackerDB:
         return self.users.find_one({"username": username})
 
     def get_user_by_id(self, user_id):
-        return self.users.find_one({"_id": ObjectId(user_id)})
+        oid = self._ensure_oid(user_id)
+        return self.users.find_one({"_id": oid})
 
     def authenticate_user(self, username, password):
         user = self.get_user_by_username(username)
@@ -57,23 +68,29 @@ class PetTrackerDB:
         return None
 
     # --- PETS ---
-    def add_pet(self, name, owner_id, mac_address=None, bt_name=None):
+    def add_pet(self, name, owner_id, mac_address=None, bt_name=None, temp_min=None, temp_max=None):
         pet_data = {
             "name": name,
-            "owner_id": str(owner_id)
+            "owner_id": str(owner_id),  # restiamo coerenti con i dati esistenti
+            "created_at": datetime.now(timezone.utc),
         }
         if mac_address:
             pet_data["mac_address"] = mac_address
         if bt_name:
             pet_data["bt_name"] = bt_name
+        if temp_min is not None:
+            pet_data["temp_min"] = temp_min
+        if temp_max is not None:
+            pet_data["temp_max"] = temp_max
         return self.pets.insert_one(pet_data).inserted_id
 
     def get_pets_for_user(self, user_id):
+        # coerente con l'uso della stringa per owner_id
         return list(self.pets.find({"owner_id": str(user_id)}))
 
     def get_pet_by_id(self, pet_id):
-        return self.pets.find_one({"_id": ObjectId(pet_id)})
-
+        oid = self._ensure_oid(pet_id)
+        return self.pets.find_one({"_id": oid})
 
     def update_pet(self, pet_id, name=None, mac_address=None, bt_name=None, temp_min=None, temp_max=None):
         update_fields = {}
@@ -88,10 +105,12 @@ class PetTrackerDB:
         if temp_max is not None:
             update_fields["temp_max"] = temp_max
         if update_fields:
-            self.pets.update_one({"_id": ObjectId(pet_id)}, {"$set": update_fields})
+            oid = self._ensure_oid(pet_id)
+            self.pets.update_one({"_id": oid}, {"$set": update_fields})
 
     def delete_pet(self, pet_id):
-        self.pets.delete_one({"_id": ObjectId(pet_id)})
+        oid = self._ensure_oid(pet_id)
+        self.pets.delete_one({"_id": oid})
 
     # --- ROOMS (globali, per configurazione area/stanze) ---
     def get_rooms(self):
@@ -106,21 +125,22 @@ class PetTrackerDB:
         }).inserted_id
 
     def get_room_by_id(self, room_id):
-        return self.rooms.find_one({"_id": ObjectId(room_id)})
+        oid = self._ensure_oid(room_id)
+        return self.rooms.find_one({"_id": oid})
 
     def update_room(self, room_id, name, mac_address, allowed):
+        oid = self._ensure_oid(room_id)
         update_data = {"name": name, "mac_address": mac_address, "allowed": allowed}
-        self.rooms.update_one({"_id": ObjectId(room_id)}, {"$set": update_data})
+        self.rooms.update_one({"_id": oid}, {"$set": update_data})
 
     def delete_room(self, room_id):
-        self.rooms.delete_one({"_id": ObjectId(room_id)})
+        oid = self._ensure_oid(room_id)
+        self.rooms.delete_one({"_id": oid})
 
     def update_room_access(self, room_id, allowed):
-        from bson import ObjectId
-        self.rooms.update_one(
-            {"_id": ObjectId(room_id)},
-            {"$set": {"allowed": allowed}}
-        )
+        oid = self._ensure_oid(room_id)
+        self.rooms.update_one({"_id": oid}, {"$set": {"allowed": allowed}})
+
     # --- PERIMETRO (globale per tutti i pet) ---
     def get_perimeter_center(self):
         perim = self.perimeters.find_one({"key": "global"})
@@ -142,8 +162,9 @@ class PetTrackerDB:
         )
 
     def set_pet_allowed_rooms(self, pet_id, room_ids):
+        oid = self._ensure_oid(pet_id)
         self.pets.update_one(
-            {"_id": ObjectId(pet_id)},
+            {"_id": oid},
             {"$set": {"allowed_rooms": [str(r) for r in room_ids]}}
         )
 
@@ -159,7 +180,6 @@ class PetTrackerDB:
         })
 
     def save_position(self, pet_id, entry_type, timestamp=None, **kwargs):
-        from datetime import datetime, timezone
         if not timestamp:
             timestamp = datetime.now(timezone.utc)
         record = {
@@ -187,13 +207,19 @@ class PetTrackerDB:
 
     # --- IMMAGINI (opzionale, via GridFS) ---
     def save_pet_image(self, image_data, filename, pet_id):
-        image_id = self.gridfs_images.put(image_data, filename=filename, pet_id=str(pet_id), upload_date=datetime.now(timezone.utc))
+        image_id = self.gridfs_images.put(
+            image_data,
+            filename=filename,
+            pet_id=str(pet_id),
+            upload_date=datetime.now(timezone.utc)
+        )
         return image_id
 
     def get_pet_image(self, image_id):
-        file = self.gridfs_images.get(ObjectId(image_id))
+        file = self.gridfs_images.get(self._ensure_oid(image_id))
         return file.read(), file.filename
 
+    # --- ENV DATA ---
     def save_env_data(self, pet_id, temp, hum, timestamp):
         self.db.envdata.insert_one({
             "pet_id": str(pet_id),
@@ -201,14 +227,16 @@ class PetTrackerDB:
             "hum": hum,
             "timestamp": timestamp
         })
+
     def get_latest_env(self, pet_id):
         return self.db.envdata.find_one({"pet_id": str(pet_id)}, sort=[("timestamp", -1)])
+
     @staticmethod
     def is_inside_perimeter(lat, lon, area):
         try:
             from shapely.geometry import Point, Polygon
             point = Point(lon, lat)
-            polygon = Polygon([(lng, lt) for lt, lng in area])
+            polygon = Polygon([(lng, lt) for lt, lng in area])  # area = [(lat, lon), ...]
             return polygon.contains(point)
         except ImportError:
             print("Installa shapely per usare questa funzione!")

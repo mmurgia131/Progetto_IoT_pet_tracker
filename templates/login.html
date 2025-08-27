@@ -38,35 +38,18 @@
             text-align: center;
             letter-spacing: 0.5px;
         }
-        h1 {
-            display: none;
-        }
-        form {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-bottom: 7px;
-            color: #1976d2;
-            font-weight: 600;
-            font-size: 1.08rem;
-        }
+        h1 { display: none; }
+        form { width: 100%; display: flex; flex-direction: column; }
+        label { margin-bottom: 7px; color: #1976d2; font-weight: 600; font-size: 1.08rem; }
         input[type="text"], input[type="password"] {
-            padding: 12px;
-            margin-bottom: 22px;
-            border: 1.5px solid #b5d1ee;
-            border-radius: 8px;
-            font-size: 1.09rem;
-            background: #f6fbff;
-            transition: border 0.2s;
-            outline: none;
+            padding: 12px; margin-bottom: 22px; border: 1.5px solid #b5d1ee;
+            border-radius: 8px; font-size: 1.09rem; background: #f6fbff; transition: border 0.2s; outline: none;
         }
         input[type="text"]:focus, input[type="password"]:focus {
             border: 1.5px solid #1976d2;
             background: #e3f2fd;
         }
-        button[type="submit"] {
+        button[type="submit"], .simple-btn {
             background: #1976d2;
             color: #fff;
             border: none;
@@ -76,10 +59,10 @@
             font-weight: 700;
             cursor: pointer;
             box-shadow: 0 2px 12px #cae3fd;
-            transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
             margin-top: 8px;
+            transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
         }
-        button[type="submit"]:hover {
+        button[type="submit"]:hover, .simple-btn:hover {
             background: #1256a9;
             box-shadow: 0 6px 20px #b9d6fa;
             transform: translateY(-2px) scale(1.02);
@@ -96,35 +79,86 @@
             font-size: 1.01rem;
             font-weight: 600;
         }
+        .success {
+            color: #22884f;
+            background: #e2f8ea;
+            border: 1.5px solid #b3e2c1;
+            border-radius: 7px;
+            margin-bottom: 20px;
+            padding: 9px 0;
+            width: 100%;
+            text-align: center;
+            font-size: 1.01rem;
+            font-weight: 600;
+        }
+        .register-link {
+            margin-top: 18px;
+            text-align: center;
+        }
+        .register-link a {
+            color: #1976d2;
+            text-decoration: underline;
+            font-weight: 600;
+            font-size: 1.07rem;
+        }
+        .change-cred-toggle {
+            color: #1976d2; font-size: 1.05rem; margin-top: 24px; cursor: pointer; text-align: center;
+            background: none; border: none; padding: 0; font-weight: 600;
+        }
+        .change-cred-form {
+            display: none;
+            margin-top: 16px;
+            padding: 18px 12px 2px 12px;
+            background: #f6fbff;
+            border: 1.5px solid #b5d1ee;
+            border-radius: 8px;
+        }
         @media (max-width: 500px) {
-            .login-container {
-                max-width: 98vw;
-                padding: 18px 4vw;
-            }
-            .login-title {
-                font-size: 1.22rem;
-            }
-            .login-logo {
-                width: 54px;
-                height: 54px;
-            }
+            .login-container { max-width: 98vw; padding: 18px 4vw; }
+            .login-title { font-size: 1.22rem; }
+            .login-logo { width: 54px; height: 54px; }
         }
     </style>
+    <script>
+      function toggleChangeCred() {
+        var f = document.getElementById('change-cred-form');
+        if(f.style.display==='none' || f.style.display==='') f.style.display='block';
+        else f.style.display='none';
+      }
+    </script>
 </head>
 <body>
 <div class="login-container">
     <img src="{{ url_for('static', filename='pet_tracker_logo.png') }}" alt="Logo Pet Tracker" class="login-logo">
     <div class="login-title">Pet Tracker</div>
     <h1>Login</h1>
-    {% if error %}
-      <div class="error">{{ error }}</div>
-    {% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% set category, message = messages[-1] %}
+        <div class="{{ category }}">{{ message }}</div>
+      {% endif %}
+    {% endwith %}
     <form method="POST">
         <label>Username:</label>
         <input type="text" name="username" required>
         <label>Password:</label>
         <input type="password" name="password" required>
         <button type="submit">Accedi</button>
+    </form>
+    <div class="register-link">
+      <a href="{{ url_for('register') }}">Non hai un account? Registrati</a>
+    </div>
+    <button class="change-cred-toggle" type="button" onclick="toggleChangeCred()">🔑 Cambia credenziali</button>
+    <form id="change-cred-form" class="change-cred-form" method="POST" action="{{ url_for('login') }}">
+        <label>Username attuale:</label>
+        <input type="text" name="current_username" required>
+        <label>Password attuale:</label>
+        <input type="password" name="current_password" required>
+        <label>Nuovo username (opzionale):</label>
+        <input type="text" name="new_username">
+        <label>Nuova password (opzionale):</label>
+        <input type="password" name="new_password">
+        <button class="simple-btn" type="submit" name="action" value="change_credentials">Salva modifiche</button>
     </form>
 </div>
 </body>

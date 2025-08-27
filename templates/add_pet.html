@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Aggiungi nuovo animale</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body { background: #fafafa; }
+    .container {
+      max-width: 500px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 32px;
+      border-radius: 10px;
+      box-shadow: 0 0 16px #ddd;
+    }
+    h1 { font-size: 2rem; color: #1976d2; margin-bottom: 28px; }
+    form input { width: 100%; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 4px; padding: 8px 12px; font-size: 1rem;}
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 14px;
+      margin-top: 18px;
+    }
+    button {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 5px;
+      font-size: 1.05rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-weight: 600;
+    }
+    button:hover { background: #125a9c; }
+    .btn-annulla {
+      background: #e0e0e0;
+      color: #333;
+      border-radius: 5px;
+      text-decoration: none;
+      font-size: 1.05rem;
+      padding: 10px 22px;
+      transition: background 0.2s;
+      font-weight: 600;
+      display: inline-block;
+    }
+    .btn-annulla:hover { background: #bdbdbd; }
+    .dashboard-btn-container {
+      margin: 16px 0 32px 10px;
+    }
+    .dashboard-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 1.25rem;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(25,118,210,0.13);
+      transition: background 0.2s;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+    }
+    .dashboard-btn:hover {
+      background: #125a9c;
+    }
+    label {
+      color: #1976d2;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+      font-size: 1.08rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-btn-container">
+    <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
+      <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+    </form>
+  </div>
+  <div class="container">
+    <h1>Aggiungi nuovo animale</h1>
+    <form method="post">
+      <label for="pet_name">Nome</label>
+      <input type="text" name="pet_name" id="pet_name" required>
+      <label for="mac_address">MAC Address</label>
+      <input type="text" name="mac_address" id="mac_address" required>
+      <label for="bt_name">Bluetooth Name</label>
+      <input type="text" name="bt_name" id="bt_name" required>
+      <label for="temp_min">Soglia temperatura minima (°C)</label>
+      <input type="number" step="0.1" name="temp_min" id="temp_min">
+      <label for="temp_max">Soglia temperatura massima (°C)</label>
+      <input type="number" step="0.1" name="temp_max" id="temp_max">
+      <div class="form-actions">
+        <button type="submit">Aggiungi</button>
+        <a href="{{ url_for('pets') }}" class="btn-annulla">Annulla</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

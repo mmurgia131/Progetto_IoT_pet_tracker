@@ -64,9 +64,31 @@ h1{ margin:0 0 18px; font-size:28px; }
 .ticks .scale > span{
   position:absolute; top:0; transform:translateX(-50%); white-space:nowrap;
 }
+.dashboard-btn-container {
+  margin: 16px 0 32px 10px;
+}
+.dashboard-btn {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 1.25rem;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(25,118,210,0.13);
+  transition: background 0.2s;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+.dashboard-btn:hover { background: #125a9c; }
 </style>
 </head>
 <body>
+<div class="dashboard-btn-container">
+  <button type="button" class="dashboard-btn" onclick="history.back(); return false;">&#8592; Torna indietro</button>
+</div>
 <div class="container">
 
   <h1>Pet Movement Statistics</h1>

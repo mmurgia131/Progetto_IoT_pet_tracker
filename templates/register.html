@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrazione Pet Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { background: #f8fafc; font-family: 'Inter', sans-serif; }
+        .register-container {
+            max-width: 400px;
+            margin: 60px auto 0 auto;
+            padding: 38px 32px 30px 32px;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 4px 32px #bcd9ee46, 0 1.5px 4px #c2e6fb29;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .register-title {
+            color: #1976d2;
+            font-size: 2.1rem;
+            font-weight: 700;
+            margin-bottom: 26px;
+            text-align: center;
+        }
+        form { width: 100%; display: flex; flex-direction: column; }
+        label { margin-bottom: 7px; color: #1976d2; font-weight: 600; font-size: 1.08rem; }
+        input[type="text"], input[type="password"] {
+            padding: 12px; margin-bottom: 22px; border: 1.5px solid #b5d1ee;
+            border-radius: 8px; font-size: 1.09rem; background: #f6fbff; transition: border 0.2s; outline: none;
+        }
+        button[type="submit"] {
+            background: #1976d2; color: #fff; border: none; border-radius: 9px;
+            padding: 14px 0; font-size: 1.15rem; font-weight: 700; cursor: pointer;
+            margin-top: 8px;
+        }
+        .error { color: #d32f2f; background: #ffeaea; border: 1.5px solid #ffc6c6; border-radius: 7px;
+            margin-bottom: 20px; padding: 9px 0; width: 100%; text-align: center; font-size: 1.01rem; font-weight: 600;}
+        .success { color: #22884f; background: #e2f8ea; border: 1.5px solid #b3e2c1; border-radius: 7px;
+            margin-bottom: 20px; padding: 9px 0; width: 100%; text-align: center; font-size: 1.01rem; font-weight: 600;}
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <div class="register-title">Crea un nuovo account</div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    <form method="POST">
+        <label>Username:</label>
+        <input type="text" name="username" required>
+        <label>Password:</label>
+        <input type="password" name="password" required minlength="6">
+        <button type="submit">Registrati</button>
+    </form>
+    <div style="margin-top:16px;">
+        <a href="{{ url_for('login') }}">Hai già un account? Accedi</a>
+    </div>
+</div>
+</body>
+</html>

@@ -24,17 +24,38 @@ class AuthManager:
             })
             print("🔐 Default admin user created (username: admin, password: admin123)")
             print("⚠️  Cambia la password dopo il primo accesso!")
-
+            
     def verify_password(self, username, password):
         user = self.users_collection.find_one({"username": username, "is_active": True})
+        is_first_login = user and (user.get('last_login') is None)
         if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
             self.users_collection.update_one(
                 {"_id": user["_id"]},
                 {"$set": {"last_login": datetime.now()}}
             )
+            user['is_first_login'] = is_first_login  # <-- aggiungi questa riga
             return user
         return None
-
+    
+    def register_user(self, username, password):
+        if self.users_collection.find_one({"username": username}):
+            return {"success": False, "message": "Username già esistente"}
+        if len(password) < 6:
+            return {"success": False, "message": "La password deve essere almeno 6 caratteri"}
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(rounds=12))
+        self.users_collection.insert_one({
+            "username": username,
+            "password_hash": password_hash,
+            "created_at": datetime.now(),
+            "last_login": None,
+            "is_active": True
+        })
+        return {"success": True, "message": "Registrazione completata"}
+    
+    def delete_account(self, username):
+        result = self.users_collection.delete_one({"username": username})
+        return result.deleted_count == 1
+    
     def change_credentials(self, current_username, current_password, new_username=None, new_password=None):
         user = self.verify_password(current_username, current_password)
         if not user:
@@ -72,7 +93,7 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
-            flash('Devi effettuare il login per accedere a questa pagina', 'warning')
+            #flash('Devi effettuare il login per accedere a questa pagina', 'warning')
             return redirect('/login')
         return f(*args, **kwargs)
     return decorated_function

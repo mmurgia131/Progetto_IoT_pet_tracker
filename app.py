@@ -20,7 +20,7 @@ ESP32CAM_IP = os.getenv("ESP32CAM_IP", "http://172.20.10.2")
 ESP32_STREAM_PATH = "/stream"
 ESP32_CONTROL_PATH = "/control"
 
-MQTT_BROKER = "172.20.10.4"
+MQTT_BROKER = "172.20.10.4" #0.0.0.0
 MQTT_PORT = 1883
 MQTT_GPS_TOPIC = "pettracker/gps"
 MQTT_BUZZER_CMD_TOPIC = "pettracker/cmd/buzzer"
@@ -59,14 +59,44 @@ current_temp_value = None
 current_temp_min = None
 current_temp_max = None
 
-# ------------- ANCORE BLE REGISTRAZIONE -------------
+# ===== BLE / ANCORE =====
 anchors_online = {}  # mac_address: {"anchor_id": ..., "timestamp": ...}
 ANCHORS_REFRESH_SEC = 120
+
+# Rolling window RSSI per localizzazione BLE (già usata per /detected_pets)
+rssi_windows = {}  # key: (anchor_id, pet_mac) -> [RSSI, RSSI, RSSI]
+pet_room_estimate = {}  # pet_mac -> {"room": anchor_id, "avg_rssi": ..., ...}
+
+# Parametri stima presenza in stanza
+RSSI_THRESHOLD = float(os.getenv("BLE_RSSI_THRESHOLD", "-65"))   # calibra in casa tua
+BLE_EVENT_COOLDOWN_SEC = int(os.getenv("BLE_EVENT_COOLDOWN_SEC", "5"))
+last_ble_state = {}  # pet_mac -> {"room": str, "t": float, "avg": float}
+
+# Stato per notifiche stanza non consentita (utile per UI/future)
+current_in_restricted_room = False
+current_restricted_room = None
+
+@app.route('/change_credentials', methods=['GET', 'POST'])
+@login_required
+def change_credentials():
+    if request.method == 'POST':
+        current_username = session['username']
+        current_password = request.form['current_password']
+        new_username = request.form.get('new_username')
+        new_password = request.form.get('new_password')
+        result = auth_manager.change_credentials(
+            current_username, current_password,
+            new_username=new_username if new_username else None,
+            new_password=new_password if new_password else None
+        )
+        flash(result['message'], 'success' if result['success'] else 'danger')
+        if result['success']:
+            return redirect(url_for('dashboard'))
+    return render_template('change_credentials.html')
 
 @app.route('/anchors_online')
 @login_required
 def anchors_online_view():
-    # Mostra solo quelle annunciate negli ultimi ANCHORS_REFRESH_SEC secondi
     cutoff = time.time() - ANCHORS_REFRESH_SEC
     anchors = [
         {"mac_address": mac, "anchor_id": info["anchor_id"]}
@@ -74,10 +104,6 @@ def anchors_online_view():
         if info["timestamp"] > cutoff
     ]
     return jsonify({"anchors": anchors})
-
-# ------------- ROLLING WINDOW RSSI PER LOCALIZZAZIONE BLE -------------
-rssi_windows = {}  # key: (anchor_id, pet_mac) -> [RSSI, RSSI, RSSI]
-pet_room_estimate = {}  # pet_mac -> {"room": anchor_id, "avg_rssi": ...}
 
 def update_rssi_window(anchor_id, pet_mac, rssi, bt_name=None):
     key = (anchor_id, pet_mac)
@@ -97,7 +123,6 @@ def update_rssi_window(anchor_id, pet_mac, rssi, bt_name=None):
             }
             print(f"[BLE-LOC] Pet {pet_mac} stimato in stanza ancora {anchor_id} (RSSI medio {avg:.1f})")
 
-# ---- PATCH: Lista dispositivi BLE visti dalle ancore per registrazione pet ----
 @app.route('/detected_pets')
 @login_required
 def detected_pets():
@@ -105,7 +130,6 @@ def detected_pets():
     CUTOFF_SEC = 60
     pets = []
     for mac, info in pet_room_estimate.items():
-        # Mostra solo quelli visti di recente e che hanno RSSI valido
         if info.get("last_seen") and now - info["last_seen"] < CUTOFF_SEC:
             pets.append({
                 "mac_address": mac,
@@ -116,29 +140,76 @@ def detected_pets():
     pets.sort(key=lambda p: p.get("rssi", -200), reverse=True)
     return jsonify({"pets": pets})
 
-# -------------------------------------------------------------
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        if request.form.get('action') == 'change_credentials':
+            # Cambio credenziali
+            current_username = request.form['current_username']
+            current_password = request.form['current_password']
+            new_username = request.form.get('new_username')
+            new_password = request.form.get('new_password')
+            result = auth_manager.change_credentials(
+                current_username, current_password,
+                new_username=new_username if new_username else None,
+                new_password=new_password if new_password else None
+            )
+            flash(result['message'], 'success' if result['success'] else 'danger')
+            return render_template('login.html')
+        else:
+            # Login normale
+            username = request.form['username']
+            password = request.form['password']
+            user = auth_manager.verify_password(username, password)
+            if user:
+                session['username'] = user['username']
+                session['is_first_login'] = user.get('is_first_login', False)
+                flash('Login effettuato con successo!', 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Credenziali non valide', 'danger')
+                return render_template('login.html')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user = auth_manager.verify_password(username, password)
-        if user:
-            session['username'] = user['username']
-            flash('Login effettuato con successo!', 'success')
-            return redirect(url_for('dashboard'))
+        result = auth_manager.register_user(username, password)
+        if result["success"]:
+            flash('Registrazione completata! Ora puoi effettuare il login.', 'success')
+            return redirect(url_for('login'))
         else:
-            flash('Credenziali non valide', 'danger')
-            return render_template('login.html')
-    return render_template('login.html')
+            flash(result["message"], "danger")
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    flash('Logout effettuato con successo!', 'info')
+    return redirect(url_for('login'))
+
+@app.route('/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    username = session['username']
+    # Cancella l'utente dal db
+    success = auth_manager.delete_account(username)
+    session.pop('username', None)
+    if success:
+        flash('Account eliminato con successo.', 'success')
+    else:
+        flash('Errore durante l\'eliminazione dell\'account.', 'danger')
+    return redirect(url_for('login'))
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
     user = auth_manager.get_user_info(session['username'])
     pets = db.get_pets_for_user(user['_id'])
-    return render_template('dashboard.html', user=user, pets=pets)
+    is_first_login = session.pop('is_first_login', False)  # la leggiamo una volta sola
+    return render_template('dashboard.html', user=user, pets=pets, is_first_login=is_first_login)
 
 @app.route('/dashboard_pet/<pet_id>')
 @login_required
@@ -173,10 +244,18 @@ def add_pet():
             name=pet_name,
             owner_id=user['_id'],
             mac_address=mac_address,
-            bt_name=bt_name,
-            temp_min=float(temp_min) if temp_min else None,
-            temp_max=float(temp_max) if temp_max else None
+            bt_name=bt_name
+            # NB: la tua PetTrackerDB.add_pet non accetta temp_min/max; li gestiamo via update_pet se servisse
         )
+        # Se vuoi salvarle subito:
+        if temp_min or temp_max:
+            pet = db.pets.find_one({"owner_id": str(user['_id']), "mac_address": mac_address})
+            if pet:
+                db.update_pet(
+                    str(pet["_id"]),
+                    temp_min=float(temp_min) if temp_min else None,
+                    temp_max=float(temp_max) if temp_max else None
+                )
         flash("Pet aggiunto con successo!", "success")
         return redirect(url_for('dashboard'))
     return render_template('add_pet.html', user=user)
@@ -349,13 +428,12 @@ def update_temp_thresholds(pet_id):
 def build_timeline_segments(positions, period="day", start=None, end=None):
     from datetime import timedelta
 
-    # Mappa stati → colore (come da tua richiesta)
     COLORS = {
-        "ble_allowed":  "#49c24b",  # Zona Interna Consentita
-        "ble_blocked":  "#e65c5c",  # Zona Interna NON Consentita
-        "gps_allowed":  "#53c7c3",  # Zona Esterna Consentita
-        "gps_blocked":  "#ffa500",  # Zona Esterna NON Consentita
-        "no_data":      "#e9ecef",  # Nessun dato
+        "ble_allowed":  "#49c24b",
+        "ble_blocked":  "#e65c5c",
+        "gps_allowed":  "#53c7c3",
+        "gps_blocked":  "#ffa500",
+        "no_data":      "#e9ecef",
     }
 
     def state_of(p):
@@ -373,8 +451,6 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
                 return "gps_blocked"
         return "no_data"
 
-    # (le posizioni sono già convertite a timestamp_rome nella route /stats)
-    # Giorni da visualizzare
     if period == "day":
         days = [start]
     elif period in ("week", "month"):
@@ -387,18 +463,16 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
         midnight = day.replace(hour=0, minute=0, second=0, microsecond=0)
         next_midnight = midnight + timedelta(days=1)
 
-        # Eventi del giorno, ordinati
         day_positions = [p for p in positions
                          if p.get("timestamp_rome") and midnight <= p["timestamp_rome"] < next_midnight]
         day_positions.sort(key=lambda p: p["timestamp_rome"])
 
         segments = []
         cur_t = midnight
-        last_seg = None  # dict con chiavi: state, start_dt, end_dt, label
+        last_seg = None
 
         def push_or_extend(state, start_dt, end_dt, label=""):
             nonlocal last_seg
-            # unisco se stesso stato ed è contiguo (o buco ≤ 60s)
             if last_seg and last_seg["state"] == state and (start_dt - last_seg["end_dt"]).total_seconds() <= 60:
                 last_seg["end_dt"] = end_dt
             else:
@@ -410,20 +484,14 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
             end_dt = day_positions[i + 1]["timestamp_rome"] if i + 1 < len(day_positions) else next_midnight
             st = state_of(p)
 
-            # eventuale buco prima dell’evento
             if start_dt > cur_t:
                 push_or_extend("no_data", cur_t, start_dt, "Nessun dato")
-
-            # segmento evento
             push_or_extend(st, start_dt, end_dt, p.get("room") or p.get("entry_type") or "")
-
             cur_t = end_dt
 
-        # coda fino a mezzanotte
         if cur_t < next_midnight:
             push_or_extend("no_data", cur_t, next_midnight, "Nessun dato")
 
-        # serializzo per il template
         out = []
         for s in segments:
             dur_s = (s["end_dt"] - s["start_dt"]).total_seconds()
@@ -436,9 +504,7 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
             })
         timeline_by_day[day.strftime("%d/%m/%Y")] = out
 
-    # tacche orarie 0..24
     return timeline_by_day, [f"{h:02d}" for h in range(25)]
-
 
 @app.route('/stats/<pet_id>')
 @login_required
@@ -452,7 +518,6 @@ def stats(pet_id):
 
     rome = ZoneInfo("Europe/Rome")
 
-    # 1) Giorno di riferimento in ORA LOCALE (Europe/Rome)
     if date_str:
         try:
             if "/" in date_str:
@@ -465,7 +530,6 @@ def stats(pet_id):
     else:
         base_local = datetime.now(rome)
 
-    # 2) Intervallo di visualizzazione in LOCALE
     if period == 'day':
         start_local = base_local.replace(hour=0, minute=0, second=0, microsecond=0)
         end_local   = start_local + timedelta(days=1) - timedelta(microseconds=1)
@@ -483,7 +547,6 @@ def stats(pet_id):
         start_local = base_local - timedelta(days=1)
         end_local   = base_local
 
-    # 3) Query in UTC (il DB salva timestamp in UTC)
     start_utc = start_local.astimezone(timezone.utc)
     end_utc   = end_local.astimezone(timezone.utc)
 
@@ -492,7 +555,6 @@ def stats(pet_id):
         "timestamp": {"$gte": start_utc, "$lte": end_utc}
     }).sort("timestamp", 1))
 
-    # 4) Normalizza timestamp e aggiungi 'timestamp_rome'
     for p in positions:
         ts = p.get('timestamp')
         if isinstance(ts, str):
@@ -502,7 +564,6 @@ def stats(pet_id):
         p['timestamp'] = ts
         p['timestamp_rome'] = ts.astimezone(rome) if ts else None
 
-    # 5) Statistiche
     last_mov = "-"
     if positions and positions[-1].get('timestamp_rome'):
         last_mov = positions[-1]['timestamp_rome'].strftime("%H:%M")
@@ -517,17 +578,14 @@ def stats(pet_id):
         ),
     }
 
-    # 6) Timeline: usa i limiti **locali** (coerenti con 'timestamp_rome')
     timeline_by_day, calendar_hours = build_timeline_segments(positions, period, start_local, end_local)
-
-    # 7) Valore ISO per l’<input type="date">
     current_date_iso = start_local.strftime("%Y-%m-%d")
 
     return render_template(
         'stats.html',
         pet=pet,
         stats=stats_obj,
-        current_date_iso=current_date_iso,   # <— usa questo nel template
+        current_date_iso=current_date_iso,
         period=period,
         granularity=granularity,
         timeline_by_day=timeline_by_day,
@@ -549,10 +607,11 @@ def telegram_webhook():
         text = data["message"]["text"].strip().lower()
         if text == "/start":
             save_chat_id(chat_id)
-            reply_text = "✅ Iscritto alle notifiche! Riceverai un avviso se il tuo pet esce dal perimetro oppure se la temperatura è troppo alta o troppo bassa."
-            bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "8422442152:AAGNoi5GfcNuaObdO5vttkdgQFTDIpU2L9k")
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            requests.post(url, data={"chat_id": chat_id, "text": reply_text})
+            reply_text = "✅ Iscritto alle notifiche! Riceverai un avviso se il tuo pet esce dal perimetro oppure entra in una stanza NON consentita o se la temperatura è fuori soglia."
+            bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            if bot_token:
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                requests.post(url, data={"chat_id": chat_id, "text": reply_text})
     return "ok"
 
 connected_clients = set()
@@ -564,6 +623,13 @@ async def websocket_handler(websocket):
     try:
         async for message in websocket:
             try:
+                # Supporto frame BINARI (video) + TESTO (controlli/gps base64)
+                if isinstance(message, (bytes, bytearray)):
+                    for client in connected_clients.copy():
+                        if client != websocket and client.close_code is None:
+                            await client.send(message)
+                    continue
+
                 data = json.loads(message)
                 if data.get("type") == "control_command":
                     for client in connected_clients.copy():
@@ -602,6 +668,34 @@ async def run_ws_server():
 def start_websocket_server():
     asyncio.run(run_ws_server())
 
+def resolve_pet_by_mac(pet_mac: str):
+    """Trova (pet_id_str, pet_doc) dato il MAC del pet; altrimenti (None, None)."""
+    pet = db.pets.find_one({"mac_address": pet_mac})
+    return (str(pet["_id"]), pet) if pet else (None, None)
+
+def room_allowed_for_anchor(anchor_id: str):
+    """
+    Determina se la stanza/ancora è consentita:
+    - match per name == anchor_id
+    - in alternativa, match per mac_address usando anchors_online
+    Ritorna (allowed_bool, room_doc or None).
+    """
+    room = db.rooms.find_one({"name": anchor_id})
+    if room:
+        return bool(room.get("allowed", True)), room
+
+    anchor_mac = None
+    for mac, info in anchors_online.items():
+        if info.get("anchor_id") == anchor_id:
+            anchor_mac = mac
+            break
+    if anchor_mac:
+        room = db.rooms.find_one({"mac_address": anchor_mac})
+        if room:
+            return bool(room.get("allowed", True)), room
+
+    return True, None
+
 def on_mqtt_connect(client, userdata, flags, rc):
     print(f"[MQTT] Connessione: {rc}")
     client.subscribe(MQTT_GPS_TOPIC)
@@ -613,11 +707,13 @@ def on_mqtt_connect(client, userdata, flags, rc):
 def on_mqtt_message(client, userdata, msg):
     global main_asyncio_loop, latest_env
     global current_is_outside, current_temp_high, current_temp_low, current_temp_value, current_temp_min, current_temp_max, latest_gps
+    global current_in_restricted_room, current_restricted_room, last_ble_state
+
     try:
         payload = msg.payload.decode()
         print(f"[MQTT] Messaggio su {msg.topic}: {payload}")
 
-        # --- Gestione ancore BLE (annuncio su tracker/anchors) ---
+        # --- Ancore BLE si annunciano ---
         if msg.topic == MQTT_ANCHORS_TOPIC:
             try:
                 data = json.loads(payload)
@@ -633,7 +729,7 @@ def on_mqtt_message(client, userdata, msg):
                 print("Errore parsing ancora:", e)
             return
 
-        # --- Gestione rolling window RSSI BLE (topic: tracker/<anchorID>/<petMACaddress>)
+        # --- RSSI da ancora: tracker/<anchorID>/<petMAC> ---
         if msg.topic.startswith("tracker/") and len(msg.topic.split("/")) == 3:
             _, anchor_id, pet_mac = msg.topic.split("/")
             try:
@@ -641,13 +737,65 @@ def on_mqtt_message(client, userdata, msg):
                 rssi = data.get("rssi")
                 bt_name = data.get("bt_name", "")
                 if rssi is not None:
-                    update_rssi_window(anchor_id, pet_mac, float(rssi), bt_name=bt_name)
+                    rssi = float(rssi)
+                    update_rssi_window(anchor_id, pet_mac, rssi, bt_name=bt_name)
+
+                    # calcola media solo se finestra piena (3 campioni)
+                    win = rssi_windows.get((anchor_id, pet_mac))
+                    if win and len(win) == 3:
+                        avg = sum(win) / 3.0
+                        now_t = time.time()
+
+                        if avg >= RSSI_THRESHOLD:
+                            pet_id, pet_doc = resolve_pet_by_mac(pet_mac)
+                            if pet_id:
+                                last = last_ble_state.get(pet_mac)
+                                if (not last) or (last["room"] != anchor_id) or (now_t - last["t"] >= BLE_EVENT_COOLDOWN_SEC):
+                                    allowed, room_doc = room_allowed_for_anchor(anchor_id)
+                                    entry_type = "stanza_accessibile" if allowed else "stanza_non_accessibile"
+                                    try:
+                                        db.save_position(
+                                            pet_id=pet_id,
+                                            entry_type=entry_type,
+                                            source="ble",
+                                            room=anchor_id,
+                                            rssi=avg,
+                                            bt_name=bt_name
+                                        )
+                                    except Exception as e:
+                                        print("[BLE SAVE] errore:", e)
+
+                                    # Notifica se stanza NON accessibile
+                                    if not allowed:
+                                        current_in_restricted_room = True
+                                        current_restricted_room = room_doc["name"] if room_doc else anchor_id
+                                        pet_name = pet_doc.get("name", "")
+                                        gps_str = f"{latest_gps['lat']}, {latest_gps['lon']}" if latest_gps.get("lat") and latest_gps.get("lon") else None
+
+                                        notify_events(
+                                            is_outside=current_is_outside,
+                                            temp_high=current_temp_high,
+                                            temp_low=current_temp_low,
+                                            gps=gps_str,
+                                            temp_value=current_temp_value,
+                                            temp_min=current_temp_min,
+                                            temp_max=current_temp_max,
+                                            ble_restricted=True,
+                                            room=current_restricted_room,
+                                            rssi=round(avg, 1),
+                                            pet_name=pet_name,
+                                            pet_mac=pet_mac
+                                        )
+                                    else:
+                                        current_in_restricted_room = False
+                                        current_restricted_room = None
+
+                                    last_ble_state[pet_mac] = {"room": anchor_id, "t": now_t, "avg": avg}
             except Exception as e:
                 print("Errore parsing RSSI:", e)
             return
 
-        data = json.loads(payload) if msg.topic not in [MQTT_BUZZER_CMD_TOPIC] else payload
-
+        # --- GPS ---
         if msg.topic == MQTT_GPS_TOPIC:
             data = json.loads(payload)
             data['type'] = 'gps_update'
@@ -661,11 +809,9 @@ def on_mqtt_message(client, userdata, msg):
                 perimeter_radius = db.get_perimeter_radius() or 50
                 lat_centro, lon_centro = perimeter_center
                 inside = is_inside_circle(lat_pet, lon_pet, lat_centro, lon_centro, perimeter_radius)
-                pet_id = data.get("pet_id", "68a0945af163860973073d68")
-                if inside:
-                    entry_type = "zona_esterna_accessibile"
-                else:
-                    entry_type = "zona_esterna_non_accessibile"
+                pet_id = data.get("pet_id", "68a0945af163860973073d68")  # TODO: passa pet_id dal dispositivo
+                entry_type = "zona_esterna_accessibile" if inside else "zona_esterna_non_accessibile"
+
                 db.save_position(
                     pet_id=pet_id,
                     entry_type=entry_type,
@@ -715,7 +861,7 @@ def on_mqtt_message(client, userdata, msg):
                 current_temp_value = temp
                 current_temp_min = temp_min
                 current_temp_max = temp_max
-                gps_str = f"{latest_gps['lat']}, {latest_gps['lon']}" if latest_gps['lat'] and latest_gps['lon'] else None
+                gps_str = f"{latest_gps['lat']}, {latest_gps['lon']}" if latest_gps.get('lat') and latest_gps.get('lon') else None
 
                 notify_events(
                     is_outside=current_is_outside,
