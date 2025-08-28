@@ -76,6 +76,7 @@ last_ble_state = {}  # pet_mac -> {"room": str, "t": float, "avg": float}
 current_in_restricted_room = False
 current_restricted_room = None
 
+
 @app.route('/change_credentials', methods=['GET', 'POST'])
 @login_required
 def change_credentials():
@@ -506,6 +507,88 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
 
     return timeline_by_day, [f"{h:02d}" for h in range(25)]
 
+
+def build_timeline_segments(positions, period="day", start=None, end=None):
+    from datetime import timedelta
+
+    COLORS = {
+        "ble_allowed":  "#49c24b",
+        "ble_blocked":  "#e65c5c",
+        "gps_allowed":  "#53c7c3",
+        "gps_blocked":  "#ffa500",
+        "no_data":      "#e9ecef",
+    }
+
+    def state_of(p):
+        src = p.get("source")
+        et  = p.get("entry_type")
+        if src == "ble":
+            if et in ("stanza_accessibile", "normal"):
+                return "ble_allowed"
+            if et in ("stanza_non_accessibile", "restricted"):
+                return "ble_blocked"
+        if src == "gps":
+            if et == "zona_esterna_accessibile":
+                return "gps_allowed"
+            if et == "zona_esterna_non_accessibile":
+                return "gps_blocked"
+        return "no_data"
+
+    if period == "day":
+        days = [start]
+    elif period in ("week", "month"):
+        days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    else:
+        days = [start]
+
+    timeline_by_day = {}
+    for day in days:
+        midnight = day.replace(hour=0, minute=0, second=0, microsecond=0)
+        next_midnight = midnight + timedelta(days=1)
+
+        day_positions = [p for p in positions
+                         if p.get("timestamp_rome") and midnight <= p["timestamp_rome"] < next_midnight]
+        day_positions.sort(key=lambda p: p["timestamp_rome"])
+
+        segments = []
+        cur_t = midnight
+        last_seg = None
+
+        def push_or_extend(state, start_dt, end_dt, label=""):
+            nonlocal last_seg
+            if last_seg and last_seg["state"] == state and (start_dt - last_seg["end_dt"]).total_seconds() <= 60:
+                last_seg["end_dt"] = end_dt
+            else:
+                last_seg = {"state": state, "start_dt": start_dt, "end_dt": end_dt, "label": label}
+                segments.append(last_seg)
+
+        for i, p in enumerate(day_positions):
+            start_dt = p["timestamp_rome"]
+            end_dt = day_positions[i + 1]["timestamp_rome"] if i + 1 < len(day_positions) else next_midnight
+            st = state_of(p)
+
+            if start_dt > cur_t:
+                push_or_extend("no_data", cur_t, start_dt, "Nessun dato")
+            push_or_extend(st, start_dt, end_dt, p.get("room") or p.get("entry_type") or "")
+            cur_t = end_dt
+
+        if cur_t < next_midnight:
+            push_or_extend("no_data", cur_t, next_midnight, "Nessun dato")
+
+        out = []
+        for s in segments:
+            dur_s = (s["end_dt"] - s["start_dt"]).total_seconds()
+            out.append({
+                "colore": COLORS[s["state"]],
+                "start": s["start_dt"].strftime("%H:%M"),
+                "end": s["end_dt"].strftime("%H:%M"),
+                "width_pct": (dur_s / 86400) * 100.0,
+                "label": s["label"],
+            })
+        timeline_by_day[day.strftime("%d/%m/%Y")] = out
+
+    return timeline_by_day, [f"{h:02d}" for h in range(25)]
+
 @app.route('/stats/<pet_id>')
 @login_required
 def stats(pet_id):
@@ -581,6 +664,33 @@ def stats(pet_id):
     timeline_by_day, calendar_hours = build_timeline_segments(positions, period, start_local, end_local)
     current_date_iso = start_local.strftime("%Y-%m-%d")
 
+    # Costruisci tutte le 5 righe timeline per ogni giorno (per settimana/mese)
+    STATES = [
+        ("Zona Interna Consentita", "#49c24b"),
+        ("Zona Interna NON Consentita", "#e65c5c"),
+        ("Zona Esterna Consentita", "#53c7c3"),
+        ("Zona Esterna NON Consentita", "#ffa500"),
+        ("Nessun dato", "#e9ecef"),
+    ]
+
+    timeline_by_days_and_state = []
+    for day, segs in timeline_by_day.items():
+        day_rows = []
+        for label, colore in STATES:
+            riga = []
+            for s in segs:
+                if s["colore"] == colore:
+                    riga.append(s)
+                else:
+                    riga.append({
+                        "colore": "transparent",
+                        "start": s["start"],
+                        "end": s["end"],
+                        "width_pct": s["width_pct"],
+                        "label": ""
+                    })
+            day_rows.append({"label": label, "colore": colore, "segments": riga})
+    timeline_by_day, calendar_hours = build_timeline_segments(positions, period, start_local, end_local)
     return render_template(
         'stats.html',
         pet=pet,
@@ -588,9 +698,10 @@ def stats(pet_id):
         current_date_iso=current_date_iso,
         period=period,
         granularity=granularity,
-        timeline_by_day=timeline_by_day,
+        timeline_by_day=timeline_by_day,  # Questa variabile deve contenere i dati della timeline
         calendar_hours=calendar_hours
     )
+
 
 def utc_to_rome(dt):
     if dt is None:
