@@ -130,6 +130,20 @@
       font-weight: 700;
       color: #0d47a1;
     }
+
+    /* Nuovo stile per riga posizione */
+    #loc-box {
+      margin-top: 10px;
+      padding: 10px 18px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+      font-size: 1.03rem;
+      color: #333;
+      display: inline-block;
+    }
+    #loc-box a { color: #1976d2; text-decoration: underline; font-weight:600; }
+
     @media (max-width: 600px) {
       .main {
         padding: 22px 5px 44px 5px;
@@ -174,6 +188,12 @@
       <span id="env-temp">--</span>°C,
       <span id="env-hum">--</span>%
     </div>
+
+    <!-- Nuova riga: posizione logica / gps / none -->
+    <div id="loc-box">
+      Posizione: <span id="loc-text">--</span>
+    </div>
+
     <script>
       function updateEnvBox() {
         fetch('/get_latest_env/{{ pet._id }}')
@@ -183,10 +203,36 @@
             document.getElementById('env-hum').textContent = (env.hum !== null && !isNaN(env.hum)) ? env.hum.toFixed(1) : '--';
           });
       }
-      // Aggiorna ogni 20 secondi
+
+
+      function updateLocationBox() {
+        fetch('/get_pet_location/{{ pet._id }}')
+          .then(r => r.json())
+          .then(data => {
+            const span = document.getElementById('loc-text');
+            // Priorità: stanza via BLE -> coordinate GPS -> none
+            if (data.room) {
+              span.textContent = data.room;
+            } else if (data.gps && data.gps.lat && data.gps.lon) {
+              // link alla pagina Localizza
+              const mapUrl = "{{ url_for('localizza') }}";
+              span.innerHTML = 'Vai alla <a href="' + mapUrl + '">mappa</a> per vedere la posizione del pet';
+            } else {
+              span.textContent = 'none';
+            }
+          })
+          .catch(err => {
+            console.log("Errore fetch posizione pet:", err);
+          });
+      }
+
+      // Aggiorna periodicamente sia ambiente che posizione
       updateEnvBox();
-      setInterval(updateEnvBox, 20000);
+      updateLocationBox();
+      setInterval(updateEnvBox, 20000);      // 20s per env (come prima)
+      setInterval(updateLocationBox, 15000); // 15s per posizione (puoi calibrare)
     </script>
+
     <div class="pet-details">
       <form method="post" action="{{ url_for('update_temp_thresholds', pet_id=pet._id) }}" style="margin-top:22px;margin-bottom:0;">
         <label for="temp_min"><b>Soglia minima temperatura (°C):</b></label>

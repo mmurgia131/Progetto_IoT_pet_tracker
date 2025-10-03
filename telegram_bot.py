@@ -8,7 +8,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8422442152:AAGNoi5Gfc
 CHAT_IDS_FILE = "chat_ids.json"
 
 
-NOTIFICATION_COOLDOWN_SEC = int(os.getenv("NOTIFICATION_COOLDOWN_SEC", "90"))
+NOTIFICATION_COOLDOWN_SEC = int(os.getenv("NOTIFICATION_COOLDOWN_SEC", "60"))
 
 last_notification_time = 0
 
@@ -85,7 +85,10 @@ def notify_events(
 
     # --- Perimetro ---
     if is_outside:
-        lines.append("📍 <b>Fuori dal perimetro consentito</b>")
+        if pet_name:
+            lines.append(f"📍 <b>{pet_name} Fuori dal perimetro consentito</b>")
+        else:
+            lines.append("📍 <b>Fuori dal perimetro consentito</b>")
 
     # --- Temperatura ---
     if temp_high and temp_value is not None and temp_max is not None:

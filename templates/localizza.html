@@ -117,60 +117,104 @@
       <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
     </form>
   </div>
+
   <button id="followBtn" type="button">Segui Pet</button>
   <div id="map"></div>
+
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Centra su Italia, verrà aggiornata appena arriva la posizione vera
-    let lat = 41.9;
-    let lon = 12.5;
+    // mappa mac -> nome passata dal server
+    const PETS_BY_MAC = {{ pets_by_mac | default({}) | tojson | safe }};
+
+    // Mappa / marker / stato
+    let lat = 41.9, lon = 12.5;
     let map = L.map('map').setView([lat, lon], 17);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
-
-    let marker = L.marker([lat, lon]).addTo(map)
-      .bindPopup('Pet').openPopup();
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    let marker = L.marker([lat, lon]).addTo(map).bindPopup('Pet').openPopup();
 
     let followPet = true;
+    let followKey = null; // chiave usata per seguire: preferibilmente pet_id, altrimenti pet_mac
+    const latestPositions = {}; // key -> {lat, lon, ts}
 
-    // WebSocket per aggiornamento posizione
+    const followBtn = document.getElementById('followBtn');
+    function setFollowButtonLabel(name, mac, petId) {
+      const label = name || (mac && PETS_BY_MAC[mac]) || "Pet";
+      followBtn.textContent = "Segui " + label;
+      followBtn.dataset.petId = petId || "";
+      followBtn.dataset.petMac = mac || "";
+    }
+
+    // inizializza etichetta se il server ha passato un MAC iniziale
+    {% if mac_address %}
+      setFollowButtonLabel(PETS_BY_MAC["{{ mac_address }}"] || null, "{{ mac_address }}", "");
+    {% else %}
+      setFollowButtonLabel(null, null, null);
+    {% endif %}
+
+    // WebSocket
     let ws_scheme = location.protocol === "https:" ? "wss" : "ws";
     let ws_url = ws_scheme + "://" + location.hostname + ":8765/";
     let ws = new WebSocket(ws_url);
 
+    ws.onopen = () => console.log("WS connesso");
+
     ws.onmessage = function(event) {
       let data = {};
-      try { data = JSON.parse(event.data); } catch(e) {}
-      if (data.type === "gps_update" && data.lat && data.lon) {
-        marker.setLatLng([data.lat, data.lon]);
-        if (followPet) map.setView([data.lat, data.lon]);
+      try { data = JSON.parse(event.data); } catch(e) { return; }
+
+      if (data.type === "gps_update" && data.lat !== undefined && data.lon !== undefined) {
+        const lat = parseFloat(data.lat);
+        const lon = parseFloat(data.lon);
+        const petId = data.pet_id || null;
+        const petMac = data.pet_mac || null;
+        const petName = data.pet_name || (petMac ? (PETS_BY_MAC[petMac] || null) : null);
+
+        // chiave preferita per memorizzare posizione
+        const key = petId || petMac || "__global__";
+        latestPositions[key] = { lat: lat, lon: lon, ts: Date.now() };
+
+        // se sto seguendo (flag) e non ho ancora una key di follow oppure è la stessa, centro
+        if (followPet && (!followKey || followKey === key)) {
+          followKey = key;
+          marker.setLatLng([lat, lon]);
+          marker.getPopup().setContent(petName || petMac || "Pet");
+          map.setView([lat, lon]);
+          setFollowButtonLabel(petName, petMac, petId);
+        } else {
+          // se non sto seguendo, comunque aggiorna ultima posizione per la key
+          // (possibile estensione: creare marker separati per ogni pet)
+        }
       }
     };
 
-    ws.onclose = function() {
-      console.log("WebSocket chiuso");
-    };
+    ws.onclose = () => console.log("WS chiuso");
 
-    // Disattiva il follow quando l'utente muove la mappa manualmente
-    map.on('dragstart zoomstart', function() {
-      followPet = false;
-    });
-
-    // Pulsante per tornare a seguire il pet
-    document.getElementById('followBtn').onclick = function() {
+    // click sul bottone: centra la mappa sulla posizione associata all'etichetta corrente
+    followBtn.onclick = function() {
       followPet = true;
-      // Chiedi la posizione attuale subito via GET
-      fetch('/get_latest_gps')
-        .then(r => r.json())
-        .then(gps => {
+      const pid = this.dataset.petId || "";
+      const pmac = this.dataset.petMac || "";
+      const key = pid || pmac || "__global__";
+      if (latestPositions[key]) {
+        const p = latestPositions[key];
+        marker.setLatLng([p.lat, p.lon]);
+        map.setView([p.lat, p.lon]);
+        followKey = key;
+      } else {
+        // fallback: richiesta al server dell'ultima posizione globale
+        fetch('/get_latest_gps').then(r => r.json()).then(gps => {
           if (gps && gps.lat && gps.lon) {
             marker.setLatLng([gps.lat, gps.lon]);
             map.setView([gps.lat, gps.lon]);
+            followKey = "__global__";
           }
         });
+      }
     };
+
+    // se l'utente muove la mappa, disattiva follow automatico
+    map.on('dragstart zoomstart', function() { followPet = false; });
+
   </script>
 </body>
 </html>

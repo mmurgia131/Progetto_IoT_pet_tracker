@@ -23,8 +23,6 @@ ESP32_CONTROL_PATH = "/control"
 MQTT_BROKER = "172.20.10.4" #0.0.0.0
 MQTT_PORT = 1883
 MQTT_GPS_TOPIC = "pettracker/gps"
-MQTT_BUZZER_CMD_TOPIC = "pettracker/cmd/buzzer"
-MQTT_ENV_TOPIC = "pettracker/env"
 MQTT_ANCHORS_TOPIC = "tracker/anchors"
 
 db = PetTrackerDB()
@@ -393,32 +391,71 @@ def camera_control():
 @app.route('/localizza')
 @login_required
 def localizza():
-    # Se hai più pet, puoi scegliere di passare quello selezionato o il primo
-    pets = db.get_pets_for_user(auth_manager.get_user_info(session['username'])['_id'])
-    pet_name = pets[0]['name'] if pets else 'Pet'
-    mac_address = pets[0]['mac_address'] if pets else ''
-    return render_template('localizza.html', gps=latest_gps, pet_name=pet_name, mac_address=mac_address)
+    # Passiamo alla pagina una mappa mac -> nome pet per poter mostrare etichette friendly
+    user = auth_manager.get_user_info(session['username'])
+    pets = db.get_pets_for_user(user['_id'])
+    pets_by_mac = {}
+    for p in pets:
+        mac = p.get("mac_address")
+        if mac:
+            pets_by_mac[mac] = p.get("name", mac)
 
-@app.route('/buzzer', methods=['POST'])
+    # Opzionale: mac iniziale del primo pet (se vuoi pre-selezionarlo)
+    mac_address = pets[0]['mac_address'] if pets else ''
+    return render_template('localizza.html', gps=latest_gps, pets_by_mac=pets_by_mac, mac_address=mac_address)
+
+# --- Aggiungere la seguente route in app.py (posizionala vicino ad altre route GET) ---
+
+@app.route('/get_pet_location/<pet_id>')
 @login_required
-def buzzer():
+def get_pet_location(pet_id):
+    """
+    Restituisce la posizione 'logica' del pet:
+      - room: nome della stanza stimata via BLE (se disponibile)
+      - gps: ultime coordinate GPS disponibili (se presenti)
+    Il risultato è JSON: { "room": <str|null>, "gps": { "lat": <float>, "lon": <float> } | null }
+    """
     try:
-        data = request.get_json(force=True)
-        action = data.get("action", "on").lower()
-        if mqtt_client is not None:
-            if action == "on":
-                mqtt_client.publish(MQTT_BUZZER_CMD_TOPIC, payload="on", qos=1, retain=False)
-            elif action == "off":
-                mqtt_client.publish(MQTT_BUZZER_CMD_TOPIC, payload="off", qos=1, retain=False)
-            else:
-                return jsonify(success=False, error="Azione non valida")
-            return jsonify(success=True)
-        else:
-            print("MQTT client non inizializzato")
-            return jsonify(success=False)
+        pet = db.get_pet_by_id(pet_id)
+        if not pet:
+            return jsonify({"room": None, "gps": None})
+
+        # Proviamo prima a risolvere stanza via BLE (mappa in memoria pet_room_estimate)
+        room_name = None
+        mac = pet.get("mac_address")
+        if mac:
+            info = pet_room_estimate.get(mac)
+            if info:
+                anchor_id = info.get("room")
+                # Prova a risolvere anchor_id in una stanza registrata nel DB
+                room_doc = db.rooms.find_one({"name": anchor_id}) or db.rooms.find_one({"mac_address": anchor_id})
+                if room_doc and room_doc.get("name"):
+                    room_name = room_doc.get("name")
+                else:
+                    # se non troviamo una doc, usa l'anchor_id grezzo come etichetta
+                    room_name = anchor_id
+
+        # Proviamo a fornire coordinate GPS (ultimo record per quel pet oppure fallback a latest_gps globale)
+        gps = None
+        try:
+            last_pos = db.get_last_position(pet_id)
+            if last_pos and last_pos.get("lat") is not None and last_pos.get("lon") is not None:
+                gps = {"lat": float(last_pos["lat"]), "lon": float(last_pos["lon"])}
+        except Exception:
+            gps = None
+
+        # fallback: global latest_gps (se non abbiamo posizioni specifiche)
+        if gps is None and latest_gps.get("lat") and latest_gps.get("lon"):
+            try:
+                gps = {"lat": float(latest_gps["lat"]), "lon": float(latest_gps["lon"])}
+            except Exception:
+                gps = None
+
+        return jsonify({"room": room_name, "gps": gps})
     except Exception as e:
-        print("Errore invio comando buzzer:", e)
-        return jsonify(success=False)
+        print("[GET_PET_LOCATION] Errore:", e)
+        return jsonify({"room": None, "gps": None})
+    
 
 @app.route('/update_temp_thresholds/<pet_id>', methods=['POST'])
 @login_required
@@ -737,7 +774,7 @@ async def websocket_handler(websocket):
                             await client.send(json.dumps(data))
 
                 elif data.get("type") == "sensor_data":
-                    # --- GPS: se arriva "gps" oppure lat/lon diretti ---
+                    # --- estrai coordinate GPS se presenti ---
                     lat = None
                     lon = None
                     if "gps" in data and isinstance(data["gps"], dict):
@@ -746,34 +783,72 @@ async def websocket_handler(websocket):
                     elif "lat" in data and "lon" in data:
                         lat = data.get("lat")
                         lon = data.get("lon")
+
+                    # --- estrai possibili identificativi pet dal payload ---
+                    pet_id = data.get("pet_id") or None
+                    pet_mac = data.get("pet_mac") or data.get("mac") or None
+                    pet_name = data.get("pet_name") or None
+
+                    # Se abbiamo pet_id ma non pet_mac/name, proviamo a risolvere dal DB
+                    if pet_id and (not pet_mac or not pet_name):
+                        try:
+                            pet_doc = db.get_pet_by_id(pet_id)
+                            if pet_doc:
+                                pet_mac = pet_mac or pet_doc.get("mac_address")
+                                pet_name = pet_name or pet_doc.get("name")
+                        except Exception:
+                            pass
+
+                    # Se abbiamo solo pet_mac proviamo a risolvere pet_id/name
+                    if pet_mac and not pet_id:
+                        try:
+                            resolved_id, pet_doc = resolve_pet_by_mac(pet_mac)
+                            if resolved_id:
+                                pet_id = resolved_id
+                            if pet_doc and not pet_name:
+                                pet_name = pet_doc.get("name")
+                        except Exception:
+                            pass
+
+                    # --- aggiorna latest_gps e inoltra un gps_update arricchito ---
                     if lat is not None and lon is not None:
                         latest_gps["lat"] = lat
                         latest_gps["lon"] = lon
-                        # Inoltra posizione aggiornata a tutti i client (compresa la mappa localizza)
+
                         gps_update = {
                             "type": "gps_update",
                             "lat": lat,
                             "lon": lon
                         }
+                        if pet_id:
+                            gps_update["pet_id"] = pet_id
+                        if pet_mac:
+                            gps_update["pet_mac"] = pet_mac
+                        if pet_name:
+                            gps_update["pet_name"] = pet_name
+
+                        # inoltra a tutti i client WS
                         for client in connected_clients.copy():
                             if client.close_code is None:
                                 await client.send(json.dumps(gps_update))
 
-                    # --- Temperatura/umidità (opzionale) ---
+                    # --- temperatura / umidità (se presenti) ---
                     temp = None
                     hum = None
-                    if "environmental" in data:
+                    if "environmental" in data and isinstance(data["environmental"], dict):
                         temp = data["environmental"].get("temperature")
                         hum = data["environmental"].get("humidity")
                     if "temp" in data:
                         temp = data.get("temp")
                     if "hum" in data:
                         hum = data.get("hum")
-                    timestamp = int(time.time())
+                    timestamp = data.get("timestamp", int(time.time()))
                     if temp is not None or hum is not None:
-                        latest_env["global"] = {"temp": temp, "hum": hum, "timestamp": timestamp}
-                        db.save_env_data("global", temp, hum, datetime.fromtimestamp(timestamp, timezone.utc))
-                        print(f"[WS] ENV aggiornata via WS: temp={temp} hum={hum}")
+                        # salva come global oppure per pet se pet_id presente
+                        target_key = pet_id if pet_id else "global"
+                        latest_env[target_key] = {"temp": temp, "hum": hum, "timestamp": timestamp}
+                        db.save_env_data(target_key, temp, hum, datetime.fromtimestamp(timestamp, timezone.utc))
+                        print(f"[WS] ENV aggiornata via WS: pet={target_key} temp={temp} hum={hum}")
 
                 elif data.get("type") == "heartbeat":
                     pass
@@ -828,9 +903,6 @@ def room_allowed_for_anchor(anchor_id: str):
 
 def on_mqtt_connect(client, userdata, flags, rc):
     print(f"[MQTT] Connessione: {rc}")
-    client.subscribe(MQTT_GPS_TOPIC)
-    client.subscribe(MQTT_BUZZER_CMD_TOPIC)
-    client.subscribe(MQTT_ENV_TOPIC)
     client.subscribe(MQTT_ANCHORS_TOPIC)
     client.subscribe("tracker/+/+")
 
@@ -924,86 +996,6 @@ def on_mqtt_message(client, userdata, msg):
             except Exception as e:
                 print("Errore parsing RSSI:", e)
             return
-
-        # --- GPS ---
-        if msg.topic == MQTT_GPS_TOPIC:
-            data = json.loads(payload)
-            data['type'] = 'gps_update'
-            latest_gps['lat'] = data.get('lat')
-            latest_gps['lon'] = data.get('lon')
-
-            try:
-                lat_pet = float(data.get('lat'))
-                lon_pet = float(data.get('lon'))
-                perimeter_center = db.get_perimeter_center() or (45.123456, 9.123456)
-                perimeter_radius = db.get_perimeter_radius() or 50
-                lat_centro, lon_centro = perimeter_center
-                inside = is_inside_circle(lat_pet, lon_pet, lat_centro, lon_centro, perimeter_radius)
-                pet_id = data.get("pet_id", "68a0945af163860973073d68")  # TODO: passa pet_id dal dispositivo
-                entry_type = "zona_esterna_accessibile" if inside else "zona_esterna_non_accessibile"
-
-                db.save_position(
-                    pet_id=pet_id,
-                    entry_type=entry_type,
-                    lat=lat_pet,
-                    lon=lon_pet,
-                    source="gps"
-                )
-                current_is_outside = not inside
-                gps_str = f"{lat_pet}, {lon_pet}"
-                notify_events(
-                    is_outside=current_is_outside,
-                    temp_high=current_temp_high,
-                    temp_low=current_temp_low,
-                    gps=gps_str,
-                    temp_value=current_temp_value,
-                    temp_min=current_temp_min,
-                    temp_max=current_temp_max
-                )
-            except Exception as e:
-                print(f"[GPS/NOTIFICA] Errore controllo zona consentita: {e}")
-
-            if main_asyncio_loop:
-                for ws in connected_clients.copy():
-                    if ws.close_code is None:
-                        asyncio.run_coroutine_threadsafe(ws.send(json.dumps(data)), main_asyncio_loop)
-
-        elif msg.topic == MQTT_BUZZER_CMD_TOPIC:
-            print("[MQTT] Comando buzzer ricevuto:", payload)
-
-        elif msg.topic == MQTT_ENV_TOPIC:
-            data = json.loads(payload)
-            pet_id = data.get("pet_id", "68a0945af163860973073d68")
-            temp = data.get("temp")
-            hum = data.get("hum")
-            timestamp = data.get("timestamp", int(time.time()))
-            latest_env[pet_id] = {"temp": temp, "hum": hum, "timestamp": timestamp}
-            db.save_env_data(pet_id, temp, hum, datetime.fromtimestamp(timestamp, UTC))
-
-            try:
-                pet = db.get_pet_by_id(pet_id)
-                temp_min = float(pet.get("temp_min", 0))
-                temp_max = float(pet.get("temp_max", 30))
-                temp_high = temp is not None and float(temp) > temp_max
-                temp_low = temp is not None and float(temp) < temp_min
-                current_temp_high = temp_high
-                current_temp_low = temp_low
-                current_temp_value = temp
-                current_temp_min = temp_min
-                current_temp_max = temp_max
-                gps_str = f"{latest_gps['lat']}, {latest_gps['lon']}" if latest_gps.get('lat') and latest_gps.get('lon') else None
-
-                notify_events(
-                    is_outside=current_is_outside,
-                    temp_high=current_temp_high,
-                    temp_low=current_temp_low,
-                    gps=gps_str,
-                    temp_value=current_temp_value,
-                    temp_min=current_temp_min,
-                    temp_max=current_temp_max
-                )
-            except Exception as e:
-                print(f"[ENV/NOTIFICA] Errore controllo temperatura custom: {e}")
 
     except Exception as e:
         print(f"[MQTT] Errore on_message: {e}")
