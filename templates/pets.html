@@ -40,27 +40,42 @@
         .dashboard-btn:hover {
             background: #125a9c;
         }
-        /* Nuovo: elenco dispositivi BLE visti dalle ancore */
-        #detected-pets-list {
-            margin-bottom: 14px;
-            padding: 10px 0;
+        /* Tabella BLE Devices */
+        .ble-devices-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #f1f9f5;
+            margin: 10px 0 18px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px #bde6c1;
         }
-        .detected-pet-btn {
-            background: #e3f2fd;
-            color: #1976d2;
-            border: 1px solid #b3d4fc;
-            border-radius: 7px;
-            margin: 4px 8px 4px 0;
-            padding: 7px 12px;
-            font-size: 1.03rem;
-            cursor: pointer;
-            display: inline-block;
-            font-weight: 600;
-            transition: background 0.15s, color 0.15s;
+        .ble-devices-table th, .ble-devices-table td {
+            padding: 13px 12px;
+            text-align: left;
+            border-bottom: 1px solid #d6e8db;
+            font-size: 1.05rem;
         }
-        .detected-pet-btn:hover {
-            background: #1976d2;
+        .ble-devices-table th {
+            background: #43a047;
             color: #fff;
+        }
+        .ble-devices-table tr:last-child td {
+            border-bottom: none;
+        }
+        .ble-select-btn {
+            background: #43a047;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 7px 16px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+        .ble-select-btn:hover {
+            background: #256924;
         }
     </style>
 </head>
@@ -100,7 +115,7 @@
         <form class="add-pet-form" method="post" action="{{ url_for('add_pet') }}">
             <h3>Aggiungi nuovo animale</h3>
             <div id="detected-pets-list">
-                <!-- Qui vengono mostrati i pet BLE rilevati dalle ancore -->
+                <!-- Qui viene inserita la tabella dei pet BLE -->
             </div>
             <input type="text" name="pet_name" placeholder="Nome Pet" required>
             <input type="text" name="mac_address" placeholder="MAC Address" id="mac_address" required>
@@ -109,7 +124,6 @@
         </form>
     </div>
     <script>
-        // Recupera la lista dei pet BLE visti dalle ancore (esposta dal backend)
         function updateDetectedPetsList() {
             fetch('/detected_pets')
               .then(r => r.json())
@@ -117,23 +131,39 @@
                 let cont = document.getElementById('detected-pets-list');
                 cont.innerHTML = '';
                 if(data.pets && data.pets.length) {
+                    let table = document.createElement('table');
+                    table.className = 'ble-devices-table';
+                    let thead = document.createElement('thead');
+                    thead.innerHTML = '<tr><th>Nome Bluetooth</th><th>MAC Address</th><th></th></tr>';
+                    table.appendChild(thead);
+                    let tbody = document.createElement('tbody');
                     data.pets.forEach(function(dev) {
+                        let tr = document.createElement('tr');
+                        let tdName = document.createElement('td');
+                        tdName.textContent = dev.bt_name || '(sconosciuto)';
+                        let tdMac = document.createElement('td');
+                        tdMac.textContent = dev.mac_address;
+                        let tdBtn = document.createElement('td');
                         let btn = document.createElement('button');
-                        btn.className = 'detected-pet-btn';
-                        btn.textContent = (dev.bt_name ? dev.bt_name + " " : "") + dev.mac_address + (dev.rssi ? " (RSSI " + dev.rssi + ")" : "");
+                        btn.textContent = "Seleziona";
+                        btn.className = "ble-select-btn";
                         btn.onclick = function() {
                             document.getElementById('mac_address').value = dev.mac_address;
                             document.getElementById('bt_name').value = dev.bt_name || '';
                         };
-                        cont.appendChild(btn);
+                        tdBtn.appendChild(btn);
+                        tr.appendChild(tdName);
+                        tr.appendChild(tdMac);
+                        tr.appendChild(tdBtn);
+                        tbody.appendChild(tr);
                     });
+                    table.appendChild(tbody);
+                    cont.appendChild(table);
                 } else {
                     cont.innerHTML = "<small>Nessun pet BLE rilevato. Accendi il collare per registrare l'animale.</small>";
                 }
               });
         }
-
-        // Aggiorna la lista ogni 6 secondi
         updateDetectedPetsList();
         setInterval(updateDetectedPetsList, 6000);
     </script>

@@ -7,7 +7,7 @@ import os
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8422442152:AAGNoi5GfcNuaObdO5vttkdgQFTDIpU2L9k")
 CHAT_IDS_FILE = "chat_ids.json"
 
-# Cooldown unico per NON spammare (perimetro / temperatura / BLE)
+
 NOTIFICATION_COOLDOWN_SEC = int(os.getenv("NOTIFICATION_COOLDOWN_SEC", "90"))
 
 last_notification_time = 0
@@ -76,15 +76,11 @@ def notify_events(
 
     # --- BLE stanza NON consentita ---
     if ble_restricted:
-        line = "🚫 <b>Stanza NON consentita</b>"
+        line = "<b>Stanza NON consentita</b>"
         if room:
             line += f": <b>{room}</b>"
         if pet_name:
             line += f" — Pet: <b>{pet_name}</b>"
-        if pet_mac:
-            line += f" (<code>{pet_mac}</code>)"
-        if rssi is not None:
-            line += f" — RSSI: <b>{rssi} dBm</b>"
         lines.append(line)
 
     # --- Perimetro ---

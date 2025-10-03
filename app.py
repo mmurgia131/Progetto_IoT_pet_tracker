@@ -76,7 +76,6 @@ last_ble_state = {}  # pet_mac -> {"room": str, "t": float, "avg": float}
 current_in_restricted_room = False
 current_restricted_room = None
 
-
 @app.route('/change_credentials', methods=['GET', 'POST'])
 @login_required
 def change_credentials():
@@ -127,17 +126,21 @@ def update_rssi_window(anchor_id, pet_mac, rssi, bt_name=None):
 @app.route('/detected_pets')
 @login_required
 def detected_pets():
-    now = time.time()
-    CUTOFF_SEC = 60
+    # Recupera tutti i MAC già associati a un pet
+    registered_macs = set(
+        p.get("mac_address") for p in db.pets.find() if p.get("mac_address")
+    )
     pets = []
     for mac, info in pet_room_estimate.items():
-        if info.get("last_seen") and now - info["last_seen"] < CUTOFF_SEC:
-            pets.append({
-                "mac_address": mac,
-                "bt_name": info.get("bt_name", ""),
-                "rssi": info.get("avg_rssi"),
-                "anchor_id": info.get("room")
-            })
+        if mac in registered_macs:
+            continue  # Salta quelli già associati a un animale
+        pets.append({
+            "mac_address": mac,
+            "bt_name": info.get("bt_name", ""),
+            "rssi": info.get("avg_rssi"),
+            "anchor_id": info.get("room"),
+            "last_seen": info.get("last_seen")
+        })
     pets.sort(key=lambda p: p.get("rssi", -200), reverse=True)
     return jsonify({"pets": pets})
 
@@ -222,7 +225,8 @@ def dashboard_pet(pet_id):
 @app.route('/get_latest_env/<pet_id>')
 @login_required
 def get_latest_env(pet_id):
-    env = latest_env.get(pet_id) or db.get_latest_env(pet_id)
+    # Usiamo la chiave "global" per temperatura/umidità unica
+    env = latest_env.get("global") or db.get_latest_env("global")
     if not env:
         return jsonify({"temp": None, "hum": None})
     return jsonify({
@@ -230,6 +234,7 @@ def get_latest_env(pet_id):
         "hum": float(env.get("hum")) if env.get("hum") is not None else None,
         "timestamp": env.get("timestamp")
     })
+
 
 @app.route('/add_pet', methods=['GET', 'POST'])
 @login_required
@@ -384,11 +389,15 @@ def camera_control():
         return (r.text, r.status_code, {"Content-Type": r.headers.get("Content-Type", "text/plain")})
     except requests.RequestException as e:
         return f"Errore inoltro controllo: {e}", 502
-
+    
 @app.route('/localizza')
 @login_required
 def localizza():
-    return render_template('localizza.html', gps=latest_gps)
+    # Se hai più pet, puoi scegliere di passare quello selezionato o il primo
+    pets = db.get_pets_for_user(auth_manager.get_user_info(session['username'])['_id'])
+    pet_name = pets[0]['name'] if pets else 'Pet'
+    mac_address = pets[0]['mac_address'] if pets else ''
+    return render_template('localizza.html', gps=latest_gps, pet_name=pet_name, mac_address=mac_address)
 
 @app.route('/buzzer', methods=['POST'])
 @login_required
@@ -426,7 +435,8 @@ def update_temp_thresholds(pet_id):
     flash("Soglie temperatura aggiornate!", "success")
     return redirect(url_for('dashboard_pet', pet_id=pet_id))
 
-def build_timeline_segments(positions, period="day", start=None, end=None):
+def build_timeline_segments(positions, period="day", start=None, end=None, max_gap_seconds=1800):
+    # max_gap_seconds = 1800 -> 30 minuti
     from datetime import timedelta
 
     COLORS = {
@@ -485,91 +495,19 @@ def build_timeline_segments(positions, period="day", start=None, end=None):
             end_dt = day_positions[i + 1]["timestamp_rome"] if i + 1 < len(day_positions) else next_midnight
             st = state_of(p)
 
+            # Se c'è un buco tra cur_t e start_dt, metti "nessun dato"
             if start_dt > cur_t:
                 push_or_extend("no_data", cur_t, start_dt, "Nessun dato")
-            push_or_extend(st, start_dt, end_dt, p.get("room") or p.get("entry_type") or "")
-            cur_t = end_dt
 
-        if cur_t < next_midnight:
-            push_or_extend("no_data", cur_t, next_midnight, "Nessun dato")
-
-        out = []
-        for s in segments:
-            dur_s = (s["end_dt"] - s["start_dt"]).total_seconds()
-            out.append({
-                "colore": COLORS[s["state"]],
-                "start": s["start_dt"].strftime("%H:%M"),
-                "end": s["end_dt"].strftime("%H:%M"),
-                "width_pct": (dur_s / 86400) * 100.0,
-                "label": s["label"],
-            })
-        timeline_by_day[day.strftime("%d/%m/%Y")] = out
-
-    return timeline_by_day, [f"{h:02d}" for h in range(25)]
-
-
-def build_timeline_segments(positions, period="day", start=None, end=None):
-    from datetime import timedelta
-
-    COLORS = {
-        "ble_allowed":  "#49c24b",
-        "ble_blocked":  "#e65c5c",
-        "gps_allowed":  "#53c7c3",
-        "gps_blocked":  "#ffa500",
-        "no_data":      "#e9ecef",
-    }
-
-    def state_of(p):
-        src = p.get("source")
-        et  = p.get("entry_type")
-        if src == "ble":
-            if et in ("stanza_accessibile", "normal"):
-                return "ble_allowed"
-            if et in ("stanza_non_accessibile", "restricted"):
-                return "ble_blocked"
-        if src == "gps":
-            if et == "zona_esterna_accessibile":
-                return "gps_allowed"
-            if et == "zona_esterna_non_accessibile":
-                return "gps_blocked"
-        return "no_data"
-
-    if period == "day":
-        days = [start]
-    elif period in ("week", "month"):
-        days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    else:
-        days = [start]
-
-    timeline_by_day = {}
-    for day in days:
-        midnight = day.replace(hour=0, minute=0, second=0, microsecond=0)
-        next_midnight = midnight + timedelta(days=1)
-
-        day_positions = [p for p in positions
-                         if p.get("timestamp_rome") and midnight <= p["timestamp_rome"] < next_midnight]
-        day_positions.sort(key=lambda p: p["timestamp_rome"])
-
-        segments = []
-        cur_t = midnight
-        last_seg = None
-
-        def push_or_extend(state, start_dt, end_dt, label=""):
-            nonlocal last_seg
-            if last_seg and last_seg["state"] == state and (start_dt - last_seg["end_dt"]).total_seconds() <= 60:
-                last_seg["end_dt"] = end_dt
-            else:
-                last_seg = {"state": state, "start_dt": start_dt, "end_dt": end_dt, "label": label}
-                segments.append(last_seg)
-
-        for i, p in enumerate(day_positions):
-            start_dt = p["timestamp_rome"]
-            end_dt = day_positions[i + 1]["timestamp_rome"] if i + 1 < len(day_positions) else next_midnight
-            st = state_of(p)
-
-            if start_dt > cur_t:
-                push_or_extend("no_data", cur_t, start_dt, "Nessun dato")
-            push_or_extend(st, start_dt, end_dt, p.get("room") or p.get("entry_type") or "")
+            # FINE PATCH: se il gap al prossimo evento (o alla fine della giornata) è troppo grande, tronca lo stato dopo max_gap_seconds e poi "nessun dato"
+            gap_to_next = (end_dt - start_dt).total_seconds()
+            next_break = min(gap_to_next, max_gap_seconds)
+            # Segmento valido solo per max_gap_seconds
+            push_or_extend(st, start_dt, start_dt + timedelta(seconds=next_break), p.get("room") or p.get("entry_type") or "")
+            if gap_to_next > max_gap_seconds:
+                # Da qui in poi "nessun dato" fino al prossimo evento (o fine giornata)
+                nd_start = start_dt + timedelta(seconds=max_gap_seconds)
+                push_or_extend("no_data", nd_start, end_dt, "Nessun dato")
             cur_t = end_dt
 
         if cur_t < next_midnight:
@@ -655,11 +593,61 @@ def stats(pet_id):
         'n_points': len(positions),
         'top_room': "None",
         'last_movement': last_mov,
-        'restricted_entries': sum(
-            1 for p in positions
-            if p.get('entry_type') in ['zona_esterna_non_accessibile', 'restricted', 'stanza_non_accessibile']
-        ),
+        'restricted_entries': 0,
     }
+
+    if positions:
+        # ----------- Total Movements -----------
+        total_movements = 1  # Primo movimento conta sempre
+        prev_state = None
+        for p in positions:
+            # Scegli una tupla che rappresenta la posizione logica (room oppure entry_type)
+            key = (p.get("room"), p.get("entry_type"))
+            if prev_state is not None and key != prev_state:
+                total_movements += 1
+            prev_state = key
+        stats_obj['n_points'] = total_movements
+
+        # ----------- Top Room -----------
+        # Somma il tempo in ogni stanza BLE (solo per eventi "ble_allowed" o "ble_blocked")
+        from collections import defaultdict
+        room_times = defaultdict(float)
+        for i in range(len(positions) - 1):
+            p = positions[i]
+            next_p = positions[i + 1]
+            if p.get("room"):
+                dt = (next_p["timestamp"] - p["timestamp"]).total_seconds()
+                room_times[p["room"]] += max(dt, 0)
+        if room_times:
+            top_room = max(room_times.items(), key=lambda x: x[1])[0]
+            room_times = defaultdict(float)
+            for i in range(len(positions) - 1):
+                p = positions[i]
+                next_p = positions[i + 1]
+                if p.get("room"):
+                    dt = (next_p["timestamp"] - p["timestamp"]).total_seconds()
+                    room_times[p["room"]] += max(dt, 0)
+
+            # Crea una mappa MAC address → nome stanza leggibile
+            room_name_map = {}
+            for room in db.get_rooms():
+                if "mac_address" in room and "name" in room:
+                    room_name_map[room["mac_address"]] = room["name"]
+
+            if room_times:
+                # Trova la chiave (MAC address) con più tempo e mostra il nome stanza
+                top_room_mac = max(room_times.items(), key=lambda x: x[1])[0]
+                stats_obj['top_room'] = room_name_map.get(top_room_mac, top_room_mac)
+            else:
+                stats_obj['top_room'] = "None"
+
+        # ----------- Restricted Entries -----------
+        restricted_entries = 0
+        for p in positions:
+            et = p.get("entry_type", "")
+            if et in ["zona_esterna_non_accessibile", "restricted", "stanza_non_accessibile"]:
+                restricted_entries += 1
+        stats_obj['restricted_entries'] = restricted_entries
 
     timeline_by_day, calendar_hours = build_timeline_segments(positions, period, start_local, end_local)
     current_date_iso = start_local.strftime("%Y-%m-%d")
@@ -734,7 +722,7 @@ async def websocket_handler(websocket):
     try:
         async for message in websocket:
             try:
-                # Supporto frame BINARI (video) + TESTO (controlli/gps base64)
+                # Supporto frame BINARI (video)
                 if isinstance(message, (bytes, bytearray)):
                     for client in connected_clients.copy():
                         if client != websocket and client.close_code is None:
@@ -742,20 +730,51 @@ async def websocket_handler(websocket):
                     continue
 
                 data = json.loads(message)
+                # Comandi di controllo
                 if data.get("type") == "control_command":
                     for client in connected_clients.copy():
                         if client != websocket and client.close_code is None:
                             await client.send(json.dumps(data))
-                elif data.get("type") == "sensor_data" and "gps" in data:
-                    latest_gps.update(data['gps'])
-                    gps_update = {
-                        "type": "gps_update",
-                        "lat": latest_gps["lat"],
-                        "lon": latest_gps["lon"]
-                    }
-                    for client in connected_clients.copy():
-                        if client != websocket and client.close_code is None:
-                            await client.send(json.dumps(gps_update))
+
+                elif data.get("type") == "sensor_data":
+                    # --- GPS: se arriva "gps" oppure lat/lon diretti ---
+                    lat = None
+                    lon = None
+                    if "gps" in data and isinstance(data["gps"], dict):
+                        lat = data["gps"].get("lat")
+                        lon = data["gps"].get("lon")
+                    elif "lat" in data and "lon" in data:
+                        lat = data.get("lat")
+                        lon = data.get("lon")
+                    if lat is not None and lon is not None:
+                        latest_gps["lat"] = lat
+                        latest_gps["lon"] = lon
+                        # Inoltra posizione aggiornata a tutti i client (compresa la mappa localizza)
+                        gps_update = {
+                            "type": "gps_update",
+                            "lat": lat,
+                            "lon": lon
+                        }
+                        for client in connected_clients.copy():
+                            if client.close_code is None:
+                                await client.send(json.dumps(gps_update))
+
+                    # --- Temperatura/umidità (opzionale) ---
+                    temp = None
+                    hum = None
+                    if "environmental" in data:
+                        temp = data["environmental"].get("temperature")
+                        hum = data["environmental"].get("humidity")
+                    if "temp" in data:
+                        temp = data.get("temp")
+                    if "hum" in data:
+                        hum = data.get("hum")
+                    timestamp = int(time.time())
+                    if temp is not None or hum is not None:
+                        latest_env["global"] = {"temp": temp, "hum": hum, "timestamp": timestamp}
+                        db.save_env_data("global", temp, hum, datetime.fromtimestamp(timestamp, timezone.utc))
+                        print(f"[WS] ENV aggiornata via WS: temp={temp} hum={hum}")
+
                 elif data.get("type") == "heartbeat":
                     pass
                 elif data.get("type") == "frame":

@@ -87,8 +87,9 @@
             };
 
             ws.onmessage = (event) => {
-                // A) FRAME BINARIO (JPEG)
+                // FRAME BINARIO (JPEG)
                 if (event.data instanceof ArrayBuffer) {
+                    // Prova a decodificare come immagine JPEG
                     const blob = new Blob([event.data], { type: "image/jpeg" });
                     const url = URL.createObjectURL(blob);
                     const img = document.getElementById("cam");
@@ -98,10 +99,22 @@
                     };
                     img.src = url;
                     img.style.display = "inline-block";
+                    // Prova anche a decodificare come JSON (telemetria)
+                    const text = new TextDecoder().decode(event.data);
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.type === "telemetry") {
+                            setStatus(
+                                `🌡️ ${data.temp !== undefined ? data.temp + "°C" : "--"} | 💧 ${data.hum !== undefined ? data.hum + "%" : "--"}`
+                            );
+                        }
+                    } catch (e) {
+                        // Non era telemetria, era solo un'immagine JPEG
+                    }
                     return;
                 }
 
-                // B) MESSAGGIO TESTUALE (JSON)
+                // MESSAGGIO TESTUALE (JSON)
                 try {
                     const data = JSON.parse(event.data);
                     if (data.type === "gps_update") {
@@ -110,6 +123,10 @@
                         const img = document.getElementById("cam");
                         img.src = "data:image/jpeg;base64," + data.frame;
                         img.style.display = "inline-block";
+                    } else if (data.type === "telemetry") {
+                        setStatus(
+                            `🌡️ ${data.temp !== undefined ? data.temp + "°C" : "--"} | 💧 ${data.hum !== undefined ? data.hum + "%" : "--"}`
+                        );
                     }
                 } catch {
                     // Ignora testo non-JSON
@@ -165,25 +182,20 @@
             this.classList.toggle("flash-on", flashOn);
         };
 
-        // Pulsante Buzzer via MQTT (POST al backend)
+        // Pulsante Buzzer (via WebSocket, solo se connesso)
         document.getElementById('buzzerBtn').onclick = function() {
-            const action = buzzerOn ? "off" : "on";
-            fetch('{{ url_for("buzzer") }}', {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    buzzerOn = !buzzerOn;
-                    this.textContent = buzzerOn ? "Disattiva Buzzer" : "Attiva Buzzer";
-                    this.classList.toggle("buzzer-on", buzzerOn);
-                } else {
-                    alert("Errore attivazione buzzer");
-                }
-            })
-            .catch(() => alert("Errore attivazione buzzer"));
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                setStatus("WebSocket non connesso!");
+                return;
+            }
+            const msg = {
+                type: "control_command",
+                command: buzzerOn ? "buzzer:off" : "buzzer:on"
+            };
+            ws.send(JSON.stringify(msg));
+            buzzerOn = !buzzerOn;
+            this.textContent = buzzerOn ? "Spegni Buzzer" : "Attiva Buzzer";
+            this.classList.toggle("buzzer-on", buzzerOn);
         };
     </script>
 </body>

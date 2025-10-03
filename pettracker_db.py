@@ -222,14 +222,17 @@ class PetTrackerDB:
     # --- ENV DATA ---
     def save_env_data(self, pet_id, temp, hum, timestamp):
         self.db.envdata.insert_one({
-            "pet_id": str(pet_id),
+            "pet_id": str(pet_id) if pet_id else "global",
             "temp": temp,
             "hum": hum,
             "timestamp": timestamp
         })
 
-    def get_latest_env(self, pet_id):
-        return self.db.envdata.find_one({"pet_id": str(pet_id)}, sort=[("timestamp", -1)])
+    def get_latest_env(self, pet_id=None):
+        # se pet_id non è passato o è "global", prendiamo il dato globale
+        key = str(pet_id) if pet_id else "global"
+        return self.db.envdata.find_one({"pet_id": key}, sort=[("timestamp", -1)])
+
 
     @staticmethod
     def is_inside_perimeter(lat, lon, area):

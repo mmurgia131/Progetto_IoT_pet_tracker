@@ -9,10 +9,10 @@
         body {
             background: #f6f7fb;
             color: #222;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Un font più moderno */
         }
-        /* Modifica qui per rendere il container più grande */
         .container {
-            max-width: 96vw; /* Rende il container quasi grande quanto la finestra */
+            max-width: 96vw;
             margin: 24px auto;
             background: #fff;
             padding: 28px;
@@ -21,81 +21,161 @@
         }
         h1 {
             margin: 0 0 18px;
-            font-size: 22px;
+            font-size: 24px; /* Un po' più grande */
+            color: #333;
         }
         .badges {
             display: flex;
-            gap: 10px;
+            gap: 12px; /* Spazio leggermente maggiore */
             flex-wrap: wrap;
-            margin: 10px 0 18px;
+            margin: 10px 0 20px; /* Margine inferiore aumentato */
         }
         .badge {
-            background: #f4f6fa;
-            padding: 8px 12px;
-            border-radius: 8px;
+            background: #e0f2f7; /* Un colore di sfondo più tenue */
+            color: #007bff; /* Testo blu per coerenza */
+            padding: 9px 14px; /* Padding aumentato */
+            border-radius: 20px; /* Bordi più arrotondati */
             font-weight: 600;
-            font-size: 0.97em;
+            font-size: 0.95em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Leggera ombra */
         }
         .legend {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin: 6px 0 18px;
+            gap: 18px; /* Spazio maggiore */
+            margin: 6px 0 22px;
             flex-wrap: wrap;
-            font-size: 0.99em;
+            font-size: 0.9em;
+            color: #555;
         }
         .legend span {
             display: flex;
             align-items: center;
-            gap: 7px;
+            gap: 8px;
         }
         .legend i {
             display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
+            width: 16px; /* Dimensione icona aumentata */
+            height: 16px; /* Dimensione icona aumentata */
+            border-radius: 4px; /* Bordi leggermente più arrotondati */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Ombra per profondità */
         }
-        .leg-green {
-            background: #49c24b;
-        }
-        .leg-red {
-            background: #e65c5c;
-        }
-        .leg-azzurro {
-            background: #53c7c3;
-        }
-        .leg-orange {
-            background: #ffa500;
-        }
+        /* Colori per la leggenda - RESI OMOGENEI */
+        .leg-green { background: #4CAF50; } /* Zona Interna Consentita */
+        .leg-red { background: #F44336; } /* Zona Interna NON Consentita */
+        .leg-azzurro { background: #53c7c3; } /* Zona Esterna Consentita */
+        .leg-orange { background: #FF9800; } /* Zona Esterna NON Consentita */
         .leg-gray {
-            background: #e9ecef;
-            border: 1px solid #dcdfe5;
+            background: #E0E0E0;
+            border: 1px solid #BDBDBD;
         }
         .controls {
             display: flex;
-            gap: 18px;
+            gap: 20px;
             align-items: center;
             flex-wrap: wrap;
-            margin-bottom: 14px;
+            margin-bottom: 20px;
         }
         .controls select, .controls input[type=date] {
-            padding: 7px 9px;
+            padding: 8px 12px;
             border-radius: 8px;
-            border: 1px solid #d7dbe5;
-            background: #fff;
-            font-size: 0.96em;
+            border: 1px solid #ccc;
+            background: #fdfdfd;
+            font-size: 0.95em;
+            color: #333;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);
+            transition: border-color 0.2s;
         }
+        .controls select:focus, .controls input[type=date]:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        /* Stili per lo slider di zoom */
+        .zoom-control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 250px; /* Larghezza fissa per lo slider */
+        }
+        .zoom-control-group label {
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .zoom-slider-wrap {
+            position: relative;
+            width: 100%;
+        }
+        #zoomSlider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            border-radius: 5px;
+            cursor: grab;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        #zoomSlider:hover {
+            opacity: 1;
+        }
+        #zoomSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+            border: 2px solid #fff;
+        }
+        #zoomSlider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+            border: 2px solid #fff;
+        }
+        #zoomSlider:active::-webkit-slider-thumb {
+            cursor: grabbing;
+        }
+        #zoomSlider:active::-moz-range-thumb {
+            cursor: grabbing;
+        }
+
+        .zoom-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .zoom-labels span:first-child { text-align: left; }
+        .zoom-labels span:last-child { text-align: right; }
+        .zoom-labels span:nth-child(2) { text-align: center; }
+
+
         .card {
             border: 1px solid #eef0f4;
             border-radius: 12px;
-            padding: 14px;
+            padding: 18px; /* Padding aumentato */
+            background: #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         .card h3 {
-            margin: 0 0 10px;
-            font-size: 1.1em;
+            margin: 0 0 15px;
+            font-size: 1.2em;
+            color: #333;
         }
         .timeline-wrap {
-            margin-top: 8px;
+            margin-top: 25px;
         }
         .viewport {
             position: relative;
@@ -106,21 +186,22 @@
         }
         .inner {
             position: relative;
-            min-width: 680px;
-            max-width: 100vw;
-            padding: 12px 10px 6px 10px;
+            min-width: 720px; /* Base width for 24 hours (24 * 30px per hour) */
+            max-width: 5000px; /* Prevent it from becoming excessively wide */
+            padding: 15px 12px 10px 12px; /* Padding aumentato */
         }
         .ticks {
             position: relative;
-            margin-bottom: 2px;
-            margin-top: 12px;
+            margin-bottom: 5px;
+            margin-top: 15px;
             color: #6b7280;
             font-size: 12px;
         }
         .ticks .scale {
             position: relative;
             width: 100%;
-            height: 16px;
+            height: 20px; /* Altezza aumentata per le tacche */
+            border-bottom: 1px solid #eee; /* Linea di base */
         }
         .ticks .scale > span {
             position: absolute;
@@ -130,72 +211,119 @@
             font-size: 11px;
             color: #aaa;
         }
+        /* Stile per le tacche intermedie */
+        .ticks .scale > span.minor-tick {
+            height: 6px;
+            border-left: 1px solid #ddd;
+            top: 0;
+            transform: translateX(-50%);
+            font-size: 0; /* Nasconde il testo */
+        }
+        .ticks .scale > span.major-tick {
+            height: 10px;
+            border-left: 1px solid #bbb;
+            top: 0;
+            transform: translateX(-50%);
+        }
+
         .row {
-            margin: 0 0 21px 0;
+            margin: 0 0 25px 0; /* Spazio maggiore tra le righe */
         }
         .bar {
             display: flex;
-            height: 17px;
-            border-radius: 6px;
+            height: 20px; /* Altezza barra aumentata */
+            border-radius: 8px; /* Bordi più arrotondati */
             overflow: hidden;
-            background: #fafbfe;
-            border: 1px solid #eef0f4;
+            background: #f0f2f5; /* Sfondo barra più scuro */
+            border: 1px solid #e2e4e8;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
         }
         .seg {
             height: 100%;
             min-width: 1px;
             position: relative;
             cursor: pointer;
+            transition: transform 0.1s ease-in-out; /* Animazione hover */
+        }
+        .seg:hover {
+            transform: translateY(-2px); /* Effetto "lift" on hover */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* Ombra al passaggio del mouse */
+            z-index: 10; /* Per assicurarsi che l'ombra sia visibile */
         }
         .tooltip {
             position: absolute;
-            top: -50px;
+            top: -60px; /* Spostato più in alto */
             left: 50%;
             transform: translateX(-50%);
-            background: #222;
+            background: #343a40; /* Sfondo scuro per il tooltip */
             color: #fff;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 20;
+            padding: 10px 18px; /* Padding aumentato */
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 100; /* Assicurati che sia sopra tutto */
             display: none;
             white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            pointer-events: none; /* Per non bloccare eventi del mouse */
+        }
+        .tooltip:after { /* Freccetta del tooltip */
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -8px;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-top-color: #343a40;
         }
         .daylabel {
-            margin-bottom: 7px;
-            font-weight: 600;
-            font-size: 1.05em;
+            margin-bottom: 10px;
+            font-weight: 700; /* Più spesso */
+            font-size: 1.1em;
             color: #1976d2;
+            padding-top: 10px; /* Spazio sopra il giorno */
         }
         .dashboard-btn-container {
             margin: 10px 0 28px 10px;
         }
         .dashboard-btn {
-            background: #1976d2;
+            background: #007bff; /* Blu primario */
             color: #fff;
             border: none;
             border-radius: 8px;
             padding: 10px 20px;
-            font-size: 1.08rem;
+            font-size: 1.05rem;
             font-family: inherit;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(25,118,210,0.13);
-            transition: background 0.2s;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.2); /* Ombra più pronunciata */
+            transition: background 0.2s, transform 0.1s;
             font-weight: 500;
-            display: flex;
+            display: inline-flex; /* Use inline-flex for proper alignment of icon and text */
             align-items: center;
+            gap: 8px;
         }
         .dashboard-btn:hover {
-            background: #125a9c;
+            background: #0056b3; /* Blu più scuro al hover */
+            transform: translateY(-1px);
+        }
+        .dashboard-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(0,123,255,0.2);
         }
         @media (max-width: 800px) {
             .container {
-                max-width: 98vw; /* Ancora più largo su schermi piccoli */
+                max-width: 98vw;
                 padding: 5vw 2vw;
             }
             .inner {
-                min-width: 340px;
+                min-width: 380px; /* Min-width leggermente aumentato */
+            }
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .zoom-control-group {
+                width: 100%; /* Larghezza piena su mobile */
             }
         }
     </style>
@@ -219,12 +347,23 @@
                 <label>Data:</label>
                 <input id="date" type="date" value="{{ current_date_iso }}" onchange="applyFilters()">
             </div>
+            <div class="zoom-control-group">
+                <label for="zoomSlider">Dettaglio Zoom:</label>
+                <div class="zoom-slider-wrap">
+                    <input type="range" min="0" max="100" value="0" class="slider" id="zoomSlider" oninput="updateZoom()">
+                </div>
+                <div class="zoom-labels">
+                    <span>Orario</span>
+                    <span>Dettaglio</span>
+                    <span>Max Precisione</span>
+                </div>
+            </div>
         </div>
         <div class="badges">
             <div class="badge">Total Movements: {{ stats.n_points }}</div>
             <div class="badge">Top Room: {{ stats.top_room }}</div>
             <div class="badge">Last Movement: {{ stats.last_movement }}</div>
-            <div class="badge">Restricted Entries: {{ stats.restricted_entries }}</div>
+            <!--<div class="badge">Restricted Entries: {{ stats.restricted_entries }}</div>-->
         </div>
         <div class="legend">
             <span><i class="leg-green"></i> Zona Interna Consentita</span>
@@ -239,17 +378,19 @@
                 <div class="inner" id="inner">
                     {% for day, segs in timeline_by_day.items() %}
                         <div class="daylabel">{{ day }}</div>
-                        <div class="ticks" style="margin-bottom:0;">
-                            <div class="scale">
-                                {% for h in range(25) %}
-                                    <span style="left: calc({{ h }}/24 * 100%);">{{ h }}</span>
-                                {% endfor %}
+                        <div class="ticks">
+                            <div class="scale" id="scale-{{ loop.index }}">
+                                <!-- Le tacche verranno generate da JavaScript -->
                             </div>
                         </div>
                         <div class="row">
                             <div class="bar">
                                 {% for s in segs %}
-                                    <span class="seg" style="width: {{ '%.6f'|format(s.width_pct) }}%; background: {{ s.colore }};" data-start="{{ s.start }}" data-end="{{ s.end }}" onclick="showTooltip(this, '{{ s.start }}', '{{ s.end }}')">
+                                    <span class="seg" style="width: {{ '%.6f'|format(s.width_pct) }}%; background: {{ s.colore }};" 
+                                          data-start="{{ s.start }}" 
+                                          data-end="{{ s.end }}" 
+                                          data-room-type="{{ s.room_type }}" {# Assumendo che s.room_type contenga la descrizione della zona #}
+                                          onclick="showTooltip(this, '{{ s.start }}', '{{ s.end }}', '{{ s.room_type }}')">
                                     </span>
                                 {% endfor %}
                             </div>
@@ -270,28 +411,221 @@
             window.location.href = url.toString();
         }
 
-        // Mostra la tooltip sopra la timeline cliccando su una barra colorata
-        function showTooltip(segmentElem, start, end) {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.innerHTML = `Inizio: <b>${start}</b> &nbsp;|&nbsp; Fine: <b>${end}</b>`;
-            tooltip.style.display = 'block';
-
-            // Trova la posizione della barra rispetto al viewport
-            const segRect = segmentElem.getBoundingClientRect();
-            const parentRect = document.body.getBoundingClientRect();
-
-            // Centra la tooltip sopra il segmento (barra)
-            const scrollTop = window.scrollY || window.pageYOffset;
-            tooltip.style.left = (segRect.left + segRect.width/2 - parentRect.left) + 'px';
-            tooltip.style.top = (segRect.top + scrollTop - 38) + 'px';
+        function parseTimeToMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
         }
 
-        // Chiudi la tooltip quando si clicca fuori da una barra
+        function formatDuration(minutes) {
+            if (minutes < 60) {
+                return `${minutes} min`;
+            }
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            if (m === 0) {
+                return `${h} h`;
+            }
+            return `${h} h ${m} min`;
+        }
+
+        function showTooltip(segmentElem, start, end, roomType) {
+            const tooltip = document.getElementById('tooltip');
+            
+            const startMinutes = parseTimeToMinutes(start);
+            const endMinutes = parseTimeToMinutes(end);
+            let durationMinutes = endMinutes - startMinutes;
+            if (durationMinutes < 0) { // Gestisce casi a cavallo della mezzanotte
+                durationMinutes += (24 * 60);
+            }
+            const duration = formatDuration(durationMinutes);
+
+            tooltip.innerHTML = `Inizio: <b>${start}</b> &nbsp;|&nbsp; Fine: <b>${end}</b> &nbsp;|&nbsp; Durata: <b>${duration}</b></b>`;
+            tooltip.style.display = 'block';
+
+            const segRect = segmentElem.getBoundingClientRect();
+            const viewportRect = document.getElementById('viewport').getBoundingClientRect();
+            const scrollTop = window.scrollY || window.pageYOffset;
+
+            // Calcola la posizione X per centrare la tooltip sopra il segmento
+            let tooltipX = segRect.left + segRect.width / 2;
+            
+            // Posiziona Y più in alto
+            let tooltipY = segRect.top + scrollTop - 65; // Ajusta per la freccetta e lo spazio
+
+            // Previene che la tooltip esca dai bordi orizzontali del viewport
+            const tooltipWidth = tooltip.offsetWidth;
+            if (tooltipX - tooltipWidth / 2 < viewportRect.left) {
+                tooltipX = viewportRect.left + tooltipWidth / 2 + 10; // 10px di margine
+            }
+            if (tooltipX + tooltipWidth / 2 > viewportRect.right) {
+                tooltipX = viewportRect.right - tooltipWidth / 2 - 10; // 10px di margine
+            }
+
+            tooltip.style.left = tooltipX + 'px';
+            tooltip.style.top = tooltipY + 'px';
+        }
+
         document.addEventListener('click', function(event) {
             const tooltip = document.getElementById('tooltip');
             if (!event.target.classList.contains('seg')) {
                 tooltip.style.display = 'none';
             }
+        });
+
+        // Funzione per generare le tacche della scala temporale
+        function generateTicks(zoomValue) {
+            const scales = document.querySelectorAll('.ticks .scale');
+            const totalMinutesInDay = 24 * 60;
+
+            scales.forEach(scale => {
+                scale.innerHTML = ''; // Pulisci le tacche esistenti
+
+                let stepMinutes = 60; // Default: ogni ora
+                let majorTickInterval = 60; // Etichetta ogni ora
+                
+                // Mappa il valore dello slider a livelli di zoom specifici
+                if (zoomValue <= 25) { // Zoom: ogni ora, etichetta ogni ora
+                    stepMinutes = 60;
+                    majorTickInterval = 60;
+                } else if (zoomValue <= 50) { // Zoom: ogni 30 minuti, etichetta ogni ora
+                    stepMinutes = 30;
+                    majorTickInterval = 60;
+                } else if (zoomValue <= 75) { // Zoom: ogni 15 minuti, etichetta ogni mezz'ora
+                    stepMinutes = 15;
+                    majorTickInterval = 30; 
+                } else { // Zoom: ogni 5 minuti, etichetta ogni 15 minuti
+                    stepMinutes = 5;
+                    majorTickInterval = 15;
+                }
+
+
+                // Genera tacche e etichette
+                for (let i = 0; i <= totalMinutesInDay; i += stepMinutes) {
+                    const hour = Math.floor(i / 60);
+                    const minute = i % 60;
+                    const position = (i / totalMinutesInDay) * 100;
+
+                    const span = document.createElement('span');
+                    span.style.left = `calc(${position}%)`;
+
+                    if (i % majorTickInterval === 0) { // Tacche principali
+                        span.textContent = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        span.classList.add('major-tick');
+                    } else if (stepMinutes < 60) { // Tacche intermedie solo se lo zoom è abbastanza alto
+                        span.classList.add('minor-tick');
+                    }
+                    scale.appendChild(span);
+                }
+            });
+        }
+             function updateZoom() {
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomValue = parseInt(zoomSlider.value);
+            const inner = document.getElementById('inner');
+            const viewport = document.getElementById('viewport');
+
+            let newWidth;
+
+            // Larghezza di riferimento per lo zoom
+            const minEffectiveHourWidth = 30; // 30px per ora a zoom minimo
+            const maxEffectiveHourWidth = 240; // 240px per ora a zoom massimo (per i 5760px totali)
+
+            const totalHours = 24; // La tua timeline copre 24 ore
+
+            // Calcola la larghezza minima leggibile per 24 ore
+            const minimumReadableWidth = totalHours * minEffectiveHourWidth; // 24 * 30 = 720px
+
+            // Calcola la larghezza massima di zoom
+            const maximumZoomWidth = totalHours * maxEffectiveHourWidth; // 24 * 240 = 5760px
+
+            if (zoomValue === 0) {
+                // Inizialmente, la timeline deve adattarsi al viewport.
+                // Prendi la larghezza disponibile del viewport e sottrai il padding.
+                const availableWidth = viewport.clientWidth - 20; // -20 per i padding di inner (10+10)
+
+                // La larghezza iniziale sarà il massimo tra:
+                // 1. La larghezza disponibile nel viewport (availableWidth).
+                // 2. La larghezza minima leggibile (minimumReadableWidth).
+                // Non vogliamo che sia più grande di 'availableWidth' per evitare lo scroll iniziale.
+                newWidth = Math.max(availableWidth, minimumReadableWidth);
+
+                // Però, la larghezza non deve superare la larghezza massima di zoom.
+                newWidth = Math.min(newWidth, maximumZoomWidth);
+
+                // IMPORTANTE: se newWidth è maggiore di availableWidth qui, avrai comunque lo scroll.
+                // Se l'intenzione è *sempre* adattarsi alla larghezza dello schermo a zoom 0,
+                // allora newWidth non deve mai superare availableWidth.
+                newWidth = availableWidth; // Forziamo l'adattamento completo se lo slider è a 0
+
+                // Tuttavia, non deve essere più stretta di una dimensione minima per la leggibilità
+                if (newWidth < minimumReadableWidth) {
+                     newWidth = minimumReadableWidth;
+                     // In questo caso, se availableWidth era minore di minimumReadableWidth,
+                     // si avrà uno scroll orizzontale, ma la timeline sarà leggibile.
+                }
+
+            } else {
+                // Logica di zoom per i valori dello slider > 0
+                // Lo zoom parte da 'minimumReadableWidth' e va fino a 'maximumZoomWidth'
+                newWidth = minimumReadableWidth + (zoomValue / 100) * (maximumZoomWidth - minimumReadableWidth);
+            }
+
+            inner.style.width = `${newWidth}px`;
+            inner.style.minWidth = `${newWidth}px`;
+
+            generateTicks(zoomValue);
+
+            // Logica di scorrimento invariata
+            const scrollLeft = viewport.scrollLeft;
+            const scrollWidth = viewport.scrollWidth;
+            const clientWidth = viewport.clientWidth;
+
+            if (scrollWidth > clientWidth && newWidth > parseFloat(inner.dataset.prevWidth || (viewport.clientWidth - 20))) {
+                const scrollPercentage = scrollLeft / (parseFloat(inner.dataset.prevWidth || (viewport.clientWidth - 20)) - clientWidth);
+                viewport.scrollLeft = scrollPercentage * (newWidth - clientWidth);
+            }
+            inner.dataset.prevWidth = newWidth;
+        }
+
+        // Assicurati che updateZoom venga chiamata al caricamento della pagina
+        window.addEventListener('load', () => {
+            const zoomSlider = document.getElementById('zoomSlider');
+            if (zoomSlider) {
+                zoomSlider.value = 0; // Inizializza a 0 per il "fit to screen"
+            }
+            updateZoom();
+        });
+
+        // Ricalcola lo zoom su ridimensionamento SOLO se la modalità "fit to screen" è attiva
+        window.addEventListener('resize', () => {
+            const zoomSlider = document.getElementById('zoomSlider');
+            if (zoomSlider && parseInt(zoomSlider.value) === 0) {
+                updateZoom();
+            }
+        });
+
+        // Assicurati che updateZoom venga chiamata al caricamento della pagina
+        // e quando la finestra viene ridimensionata se vuoi che "fit to screen" si aggiorni dinamicamente.
+        window.addEventListener('load', () => {
+            // Imposta lo slider a 0 inizialmente per attivare il "fit to screen"
+            const zoomSlider = document.getElementById('zoomSlider');
+            if (zoomSlider) {
+                zoomSlider.value = 0;
+            }
+            updateZoom();
+        });
+
+        // Opzionale: Ricalcola lo zoom su ridimensionamento se la modalità "fit to screen" è attiva
+        window.addEventListener('resize', () => {
+            const zoomSlider = document.getElementById('zoomSlider');
+            if (zoomSlider && parseInt(zoomSlider.value) === 0) {
+                updateZoom();
+            }
+        });
+
+        // Inizializza le tacche e lo zoom al caricamento della pagina
+        document.addEventListener('DOMContentLoaded', () => {
+            updateZoom(); // Chiama updateZoom per impostare lo stato iniziale
         });
     </script>
 </body>
