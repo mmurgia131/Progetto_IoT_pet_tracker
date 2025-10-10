@@ -33,7 +33,7 @@ class AuthManager:
                 {"_id": user["_id"]},
                 {"$set": {"last_login": datetime.now()}}
             )
-            user['is_first_login'] = is_first_login  # <-- aggiungi questa riga
+            user['is_first_login'] = is_first_login  
             return user
         return None
     

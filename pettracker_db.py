@@ -48,10 +48,15 @@ class PetTrackerDB:
 
     # --- UTENTI ---
     def create_user(self, username, password):
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        """
+        Crea un utente salvando la hash sotto il campo 'password_hash'.
+        Usa bcrypt con costo rounds=12 per coerenza con il resto dell'app.
+        """
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(rounds=12))
         return self.users.insert_one({
             "username": username,
-            "password": password_hash
+            "password_hash": password_hash,
+            "created_at": datetime.now(timezone.utc)
         }).inserted_id
 
     def get_user_by_username(self, username):
@@ -62,9 +67,33 @@ class PetTrackerDB:
         return self.users.find_one({"_id": oid})
 
     def authenticate_user(self, username, password):
+        """
+        Autenticazione utente:
+        - legge preferibilmente 'password_hash'
+        - mantiene retrocompatibilità se dovesse esistere ancora il campo 'password'
+        - accetta sia valori bytes che string memorizzati (se necessario)
+        """
         user = self.get_user_by_username(username)
-        if user and bcrypt.checkpw(password.encode('utf-8'), user['password']):
-            return user
+        if not user:
+            return None
+
+        # preferisci 'password_hash', fallback a 'password' (per retrocompatibilità)
+        stored = user.get('password_hash') if 'password_hash' in user else user.get('password')
+        if not stored:
+            return None
+
+        # stored può essere bytes oppure string; assicurati di avere bytes per bcrypt
+        if isinstance(stored, str):
+            stored_bytes = stored.encode('utf-8')
+        else:
+            stored_bytes = stored
+
+        try:
+            if bcrypt.checkpw(password.encode('utf-8'), stored_bytes):
+                return user
+        except Exception as e:
+            # in caso di valore non valido per bcrypt, falliamo l'autenticazione
+            print(f"[AUTH] errore verifica password per {username}: {e}")
         return None
 
     # --- PETS ---
@@ -183,7 +212,8 @@ class PetTrackerDB:
         if not timestamp:
             timestamp = datetime.now(timezone.utc)
         record = {
-            "pet_id": str(pet_id),
+            # Store pet_id only if non-None to avoid string "None"
+            "pet_id": str(pet_id) if pet_id is not None else None,
             "entry_type": entry_type,
             "timestamp": timestamp
         }
@@ -244,3 +274,27 @@ class PetTrackerDB:
         except ImportError:
             print("Installa shapely per usare questa funzione!")
             return False
+
+    # --- Migrazione (opzionale) ---
+    def migrate_password_field(self):
+        """
+        Operazione opzionale per migrare eventuali documenti che usano ancora il campo 'password'
+        al campo 'password_hash' senza alterare il valore.
+        Esegue $rename su tutti i documenti che contengono 'password' ma non 'password_hash'.
+        ATTENZIONE: se il campo 'password' contiene una password in chiaro questo non la
+        trasformerà in hash. Verificare lo stato prima di usare.
+        """
+        query = {"password": {"$exists": True}, "password_hash": {"$exists": False}}
+        docs = list(self.users.find(query, {"_id": 1, "password": 1}))
+        if not docs:
+            print("Nessun documento da migrare (campo 'password' mancante).")
+            return 0
+        count = 0
+        for d in docs:
+            try:
+                self.users.update_one({"_id": d["_id"]}, {"$rename": {"password": "password_hash"}})
+                count += 1
+            except Exception as e:
+                print(f"Errore migrazione user {d['_id']}: {e}")
+        print(f"Migrate: rinominati {count} documenti 'password' -> 'password_hash'")
+        return count

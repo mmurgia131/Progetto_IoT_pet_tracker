@@ -12,9 +12,11 @@
       background-color: #f5f5f5;
       color: #222;
     }
+
     .dashboard-btn-container {
       margin: 16px 0 32px 10px;
     }
+
     .dashboard-btn {
       background: #1976d2;
       color: #fff;
@@ -30,9 +32,11 @@
       display: flex;
       align-items: center;
     }
+
     .dashboard-btn:hover {
       background: #125a9c;
     }
+
     .header-centered {
       display: flex;
       flex-direction: column;
@@ -43,13 +47,7 @@
       border-bottom: 1px solid #e0e0e0;
       margin-bottom: 0;
     }
-    .logo-small {
-      height: 48px;
-      width: 48px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px #bbb;
-      margin-bottom: 7px;
-    }
+
     .title-centered {
       font-size: 2.1rem;
       font-weight: 700;
@@ -57,6 +55,7 @@
       margin: 0;
       text-align: center;
     }
+
     .main {
       padding: 44px 5vw 60px 5vw;
       display: flex;
@@ -65,54 +64,7 @@
       background: #f5f5f5;
       min-height: 100vh;
     }
-    .section-title {
-      margin-top: 24px;
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #1976d2;
-      text-align: center;
-      width: 100%;
-      max-width: 900px;
-    }
-    .pet-details {
-      margin: 24px 0 36px 0;
-      text-align: center;
-      font-size: 1.17rem;
-      color: #444;
-    }
-    .pet-actions {
-      display: flex;
-      gap: 32px;
-      justify-content: center;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
-    }
-    .card-button {
-      background-color: #e3f2fd;
-      border: 2px solid transparent;
-      border-radius: 16px;
-      padding: 38px 24px 32px 24px;
-      text-align: center;
-      font-size: 1.17rem;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s ease;
-      color: #1976d2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-width: 220px;
-    }
-    .card-button span {
-      display: block;
-      font-size: 2.6rem;
-      margin-bottom: 16px;
-    }
-    .card-button:hover {
-      background-color: #1976d2;
-      color: white;
-    }
+
     #env-box {
       margin: 22px 0 12px 0;
       padding: 18px 30px;
@@ -126,12 +78,13 @@
       min-width: 210px;
       text-align: center;
     }
-    #env-temp, #env-hum {
+
+    #env-temp,
+    #env-hum {
       font-weight: 700;
       color: #0d47a1;
     }
 
-    /* Nuovo stile per riga posizione */
     #loc-box {
       margin-top: 10px;
       padding: 10px 18px;
@@ -142,31 +95,91 @@
       color: #333;
       display: inline-block;
     }
-    #loc-box a { color: #1976d2; text-decoration: underline; font-weight:600; }
 
-    @media (max-width: 600px) {
-      .main {
-        padding: 22px 5px 44px 5px;
-      }
-      .pet-actions {
-        gap: 12px;
-      }
-      .card-button {
-        min-width: 80vw;
-      }
-      #env-box {
+    #loc-box a {
+      color: #1976d2;
+      text-decoration: underline;
+      font-weight: 600;
+    }
+
+    .big-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 18px;
+      width: 100%;
+      max-width: 520px;
+      align-items: center;
+    }
+
+    .big-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 66%;
+      min-width: 260px;
+      text-decoration: none;
+      background: linear-gradient(180deg, #1976d2, #145a9b);
+      color: #fff;
+      padding: 14px 22px;
+      border-radius: 12px;
+      font-size: 1.08rem;
+      font-weight: 700;
+      box-shadow: 0 8px 20px rgba(25,118,210,0.12);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      border: none;
+    }
+
+    .big-btn.secondary {
+      background: linear-gradient(180deg, #e3f2fd, #cfe9fd);
+      color: #1976d2;
+      box-shadow: 0 6px 16px rgba(16,64,122,0.06);
+      border: 1px solid #cfe9fd;
+      font-weight: 700;
+    }
+
+    .big-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(25,118,210,0.16);
+    }
+
+    .big-btn.secondary:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 26px rgba(12,62,107,0.07);
+    }
+
+    .threshold-form {
+      margin-top: 28px;
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .threshold-row {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 900px) {
+      .big-btn {
+        width: 90%;
         min-width: 0;
-        padding: 13px 7vw;
       }
-      .header-centered {
-        padding: 18px 0 12px 0;
+      .big-actions {
+        max-width: 360px;
+      }
+      .main {
+        padding: 22px 4vw 44px 4vw;
       }
       .title-centered {
-        font-size: 1.18rem;
-      }
-      .logo-small {
-        height: 35px;
-        width: 35px;
+        font-size: 1.6rem;
       }
     }
   </style>
@@ -177,89 +190,178 @@
       <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
     </form>
   </div>
+
   <div class="header-centered">
     <h1 class="title-centered">Dashboard di {{ pet.name }}</h1>
   </div>
-  <div class="main">
 
-    <!-- Box ambiente: temperatura / umidità -->
+  <div class="main">
     <div id="env-box">
       <strong>Ambiente:</strong>
       <span id="env-temp">--</span>°C,
       <span id="env-hum">--</span>%
     </div>
 
-    <!-- Nuova riga: posizione logica / gps / none -->
     <div id="loc-box">
       Posizione: <span id="loc-text">--</span>
     </div>
 
-    <script>
-      function updateEnvBox() {
-        fetch('/get_latest_env/{{ pet._id }}')
-          .then(r => r.json())
-          .then(env => {
-            document.getElementById('env-temp').textContent = (env.temp !== null && !isNaN(env.temp)) ? env.temp.toFixed(1) : '--';
-            document.getElementById('env-hum').textContent = (env.hum !== null && !isNaN(env.hum)) ? env.hum.toFixed(1) : '--';
-          });
-      }
+    <div class="big-actions">
+      <a class="big-btn" href="{{ url_for('camera') }}">📷 Telecamera</a>
+      <a class="big-btn secondary" href="{{ url_for('stats', pet_id=pet._id) }}">📊 Statistiche</a>
+    </div>
 
-
-      function updateLocationBox() {
-        fetch('/get_pet_location/{{ pet._id }}')
-          .then(r => r.json())
-          .then(data => {
-            const span = document.getElementById('loc-text');
-            // Priorità: stanza via BLE -> coordinate GPS -> none
-            if (data.room) {
-              span.textContent = data.room;
-            } else if (data.gps && data.gps.lat && data.gps.lon) {
-              // link alla pagina Localizza
-              const mapUrl = "{{ url_for('localizza') }}";
-              span.innerHTML = 'Vai alla <a href="' + mapUrl + '">mappa</a> per vedere la posizione del pet';
-            } else {
-              span.textContent = 'none';
-            }
-          })
-          .catch(err => {
-            console.log("Errore fetch posizione pet:", err);
-          });
-      }
-
-      // Aggiorna periodicamente sia ambiente che posizione
-      updateEnvBox();
-      updateLocationBox();
-      setInterval(updateEnvBox, 20000);      // 20s per env (come prima)
-      setInterval(updateLocationBox, 15000); // 15s per posizione (puoi calibrare)
-    </script>
-
-    <div class="pet-details">
-      <form method="post" action="{{ url_for('update_temp_thresholds', pet_id=pet._id) }}" style="margin-top:22px;margin-bottom:0;">
-        <label for="temp_min"><b>Soglia minima temperatura (°C):</b></label>
-        <input type="number" step="0.1" name="temp_min" id="temp_min" value="{{ pet.temp_min if pet.temp_min is not none else '' }}" style="margin-right:18px; width:80px;">
-        <label for="temp_max"><b>Soglia massima temperatura (°C):</b></label>
-        <input type="number" step="0.1" name="temp_max" id="temp_max" value="{{ pet.temp_max if pet.temp_max is not none else '' }}" style="margin-right:18px; width:80px;">
-        <button type="submit" class="dashboard-btn" style="padding:6px 20px;font-size:1rem;margin-left:8px;">Salva soglie</button>
+    <div class="threshold-form">
+      <form method="post" action="{{ url_for('update_temp_thresholds', pet_id=pet._id) }}">
+        <div class="threshold-row">
+          <label for="temp_min"><b>Soglia minima (°C):</b></label>
+          <input type="number" step="0.1" name="temp_min" id="temp_min"
+                 value="{{ pet.temp_min if pet.temp_min is not none else '' }}" style="width:90px;">
+          <label for="temp_max"><b>Soglia massima (°C):</b></label>
+          <input type="number" step="0.1" name="temp_max" id="temp_max"
+                 value="{{ pet.temp_max if pet.temp_max is not none else '' }}" style="width:90px;">
+        </div>
+        <div style="margin-top:12px;">
+          <button type="submit" class="dashboard-btn" style="padding:10px 28px; font-size:1rem;">Salva soglie</button>
+        </div>
       </form>
     </div>
-
-    <div class="pet-details">
-      <!-- Qui puoi mostrare info aggiuntive sul pet, opzionale -->
-    </div>
-    <div class="pet-actions">
-      <a href="{{ url_for('camera') }}">
-        <button class="card-button">
-          <span>📷</span>
-          Telecamera
-        </button>
-      </a>
-      <a href="{{ url_for('stats', pet_id=pet._id) }}">
-        <button class="card-button">
-          <span>📊</span>
-          Statistiche
-        </button>
-      </a>
-    </div>
   </div>
+
+  <script>
+    const PET_ID = "{{ pet._id }}";
+    const PET_MAC = "{{ pet.get('mac_address','') }}";
+    const STALE_SEC = 3 * 60; // 3 minuti
+
+    let lastGpsTs = null;
+    let currentGps = null;
+    let lastRoomTs = null;
+    let currentRoom = null;
+
+    function epochNow() { return Math.floor(Date.now() / 1000); }
+
+    function renderGPS(lat, lon, ts) {
+      currentGps = { lat: parseFloat(lat), lon: parseFloat(lon) };
+      lastGpsTs = ts || epochNow();
+      const span = document.getElementById('loc-text');
+      const latS = currentGps.lat.toFixed(6);
+      const lonS = currentGps.lon.toFixed(6);
+      const mapUrl = "{{ url_for('localizza') }}" + `?lat=${encodeURIComponent(latS)}&lon=${encodeURIComponent(lonS)}&mac=${encodeURIComponent(PET_MAC)}`;
+      span.innerHTML = `GPS: (${latS}, ${lonS}) — Vai alla <a href="${mapUrl}">mappa</a>`;
+    }
+
+    function renderRoom(roomName, ts) {
+      currentRoom = roomName;
+      lastRoomTs = ts || epochNow();
+      document.getElementById('loc-text').textContent = `Stanza: ${roomName}`;
+    }
+
+    function clearLocation() {
+      currentGps = null;
+      currentRoom = null;
+      document.getElementById('loc-text').textContent = 'Nessuna posizione disponibile';
+    }
+
+    // === Aggiornamento ENV via API (fallback) ===
+    function updateEnvBox() {
+      fetch(`/get_latest_env/${PET_ID}`)
+        .then(r => r.json())
+        .then(env => {
+          if (!env) return;
+          document.getElementById('env-temp').textContent =
+            (env.temp !== null && !isNaN(env.temp)) ? parseFloat(env.temp).toFixed(1) : '--';
+          document.getElementById('env-hum').textContent =
+            (env.hum !== null && !isNaN(env.hum)) ? parseFloat(env.hum).toFixed(1) : '--';
+        })
+        .catch(console.error);
+    }
+
+    function updateLocationBox() {
+      fetch(`/get_pet_location/${PET_ID}`)
+        .then(r => r.json())
+        .then(data => {
+          const now = epochNow();
+          if (data.room && data.room_last_seen && (now - data.room_last_seen) < STALE_SEC) {
+            renderRoom(data.room, data.room_last_seen);
+          } else if (data.gps && data.gps_last_seen && (now - data.gps_last_seen) < STALE_SEC) {
+            if (!lastRoomTs || (now - lastRoomTs) > STALE_SEC) renderGPS(data.gps.lat, data.gps.lon, data.gps_last_seen);
+          } else {
+            clearLocation();
+          }
+        })
+        .catch(() => clearLocation());
+    }
+
+    // === WebSocket realtime ===
+    (function initWS() {
+      const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = wsScheme + "://" + location.hostname + ":8765/";
+      let ws;
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        console.warn("WS non disponibile:", e);
+        return;
+      }
+
+      ws.onopen = () => console.log("WS connesso (dashboard_pet)");
+      ws.onclose = () => {
+        console.log("WS chiuso (dashboard_pet) - riprovo in 5s");
+        setTimeout(initWS, 5000);
+      };
+      ws.onerror = (e) => {
+        console.warn("WS error:", e);
+        try { ws.close(); } catch(e) {}
+      };
+
+      ws.onmessage = (evt) => {
+        let msg = null;
+        try { msg = JSON.parse(evt.data); } catch (e) { return; }
+        if (!msg || !msg.type) return;
+
+        const now = epochNow();
+
+        // === BLE update (priorità massima) ===
+        if (msg.type === "ble_update" || msg.type === "position_update") {
+          const petMac = msg.pet_mac || null;
+          const room = msg.room || msg.anchor || null;
+          if (petMac && petMac === PET_MAC && room) {
+            renderRoom(room, now);
+            console.log(`[WS] Posizione BLE aggiornata: ${room}`);
+          }
+          return; // ignora GPS se arriva nello stesso frame
+        }
+
+        // === GPS update (solo se non ho BLE recente) ===
+        if (msg.type === "gps_update") {
+          const petMac = msg.pet_mac || null;
+          const lat = parseFloat(msg.lat);
+          const lon = parseFloat(msg.lon);
+          if (petMac && petMac === PET_MAC) {
+            if (lastRoomTs && (now - lastRoomTs) <= STALE_SEC) {
+              console.log("[WS] Ignoro GPS perché BLE recente");
+              return;
+            }
+            if (!isNaN(lat) && !isNaN(lon)) renderGPS(lat, lon, now);
+          }
+        }
+
+        // === ENV update (temperatura/umidità) ===
+        if (msg.type === "env_update" && msg.pet_mac === PET_MAC) {
+          const t = parseFloat(msg.temp);
+          const h = parseFloat(msg.hum);
+          if (!isNaN(t)) document.getElementById('env-temp').textContent = t.toFixed(1);
+          if (!isNaN(h)) document.getElementById('env-hum').textContent = h.toFixed(1);
+        }
+      };
+    })();
+
+    // === Init e polling periodico ===
+    updateEnvBox();
+    updateLocationBox();
+    setInterval(updateEnvBox, 20000);
+    setInterval(updateLocationBox, 10000);
+  </script>
 </body>
 </html>

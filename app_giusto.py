@@ -66,7 +66,7 @@ rssi_windows = {}  # key: (anchor_id, pet_mac) -> [RSSI, RSSI, RSSI]
 pet_room_estimate = {}  # pet_mac -> {"room": anchor_id, "avg_rssi": ..., ...}
 
 # Parametri stima presenza in stanza
-RSSI_THRESHOLD = float(os.getenv("BLE_RSSI_THRESHOLD", "-100"))   # calibra in casa tua
+RSSI_THRESHOLD = float(os.getenv("BLE_RSSI_THRESHOLD", "-65"))   # calibra in casa tua
 BLE_EVENT_COOLDOWN_SEC = int(os.getenv("BLE_EVENT_COOLDOWN_SEC", "5"))
 last_ble_state = {}  # pet_mac -> {"room": str, "t": float, "avg": float}
 
@@ -114,7 +114,7 @@ def update_rssi_window(anchor_id, pet_mac_norm, rssi, bt_name=None):
     if len(arr) > 3:
         arr.pop(0)
     # debug
-    print(f"[RSSI-WIN] key={key} window={arr}")
+    #print(f"[RSSI-WIN] key={key} window={arr}")
     if len(arr) == 3:
         avg = sum(arr) / 3.0
         prev = pet_room_estimate.get(pet_mac_norm)
@@ -301,11 +301,9 @@ def delete_pet(pet_id):
     flash("Pet eliminato!", "info")
     return redirect(url_for('pets'))
 
-'''
 @app.route('/get_latest_gps')
 def get_latest_gps():
     return jsonify(lat=latest_gps['lat'], lon=latest_gps['lon'])
-'''
 
 @app.route('/config_area_main', methods=['GET'])
 @login_required
@@ -316,21 +314,13 @@ def config_area_main():
     perimeter_radius = db.get_perimeter_radius() or 50
     gps = latest_gps
     pet_position = (float(gps['lat']), float(gps['lon'])) if gps and gps['lat'] and gps['lon'] else None
-
-    # --- NUOVO: lista pet per la tabella di selezione ---
-    try:
-        pets = db.get_pets_for_user(user['_id'])
-    except Exception:
-        pets = []
-
     return render_template(
         'config_area_main.html',
         user=user,
         rooms=rooms,
         perimeter_center=perimeter_center,
         perimeter_radius=int(perimeter_radius),
-        pet_position=pet_position,
-        pets=pets
+        pet_position=pet_position
     )
 
 @app.route('/update_perimeter', methods=['POST'])
@@ -434,67 +424,88 @@ def normalize_mac(mac: str):
     if len(m) != 12:
         return m  # fallback: ritorna upper-case così com'è
     return ':'.join(m[i:i+2] for i in range(0, 12, 2))
+LOCATION_STALE_SEC = 5 * 60  # 5 minuti
 
-
-
-
+# Sostituisci la funzione esistente con questa versione (nessun fallback globale; controlla freschezza se vuoi)
 @app.route('/get_pet_location/<pet_id>')
 @login_required
 def get_pet_location(pet_id):
-    pet = db.get_pet_by_id(pet_id)
-    if not pet:
-        return jsonify({"error": "Pet non trovato"}), 404
+    """
+    Restituisce la posizione 'logica' del pet:
+      - room: nome della stanza stimata via BLE (se disponibile, preferibilmente il nome assegnato dall'utente)
+      - gps: ultime coordinate GPS salvate specificamente per quel pet (se presenti)
+    Non fa fallback a latest_gps come "posizione del pet" (solo se serve il global lo si richiede esplicitamente).
+    """
+    try:
+        pet = db.get_pet_by_id(pet_id)
+        if not pet:
+            return jsonify({"room": None, "room_last_seen": None, "gps": None, "gps_last_seen": None, "pet_mac": None})
 
-    mac = pet.get("mac_address")
-    if not mac:
-        return jsonify({"error": "Nessun MAC associato"}), 404
+        now = int(time.time())
+        room_name = None
+        room_last_seen = None
+        gps = None
+        gps_last_seen = None
+        mac = pet.get("mac_address")
 
-    now = time.time()
-    cutoff = now - 5 * 60  # 5 minuti
+        # --- BLE: verifica stima stanza in memoria pet_room_estimate (server side) ---
+        if mac:
+            info = pet_room_estimate.get(mac)
+            if info:
+                anchor_id = info.get("room")
+                room_last_seen = int(info.get("last_seen", 0))
 
-    # --- CERCA BLE (per pet_id, non pet_mac!) ---
-    last_ble = db.positions.find_one(
-        {"pet_id": str(pet_id), "source": "ble"},
-        sort=[("timestamp", -1)]
-    )
-    if last_ble:
-        ts = last_ble.get("timestamp")
-        if isinstance(ts, str):
-            ts = isoparse(ts)
-        if ts and ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        if ts and ts.timestamp() >= cutoff:
-            room_name = resolve_room_name(last_ble.get("room"))
-            return jsonify({
-                "room": room_name or last_ble.get("room"),
-                "room_last_seen": int(ts.timestamp())
-            })
+                # 1) prova a trovare una stanza con name == anchor_id (se l'utente ha usato lo stesso nome)
+                room_doc = db.rooms.find_one({"name": anchor_id})
+                if room_doc and room_doc.get("name"):
+                    room_name = room_doc.get("name")
+                else:
+                    # 2) prova a trovare stanza con mac_address == anchor_id (se l'anchor_id è in realtà una MAC)
+                    room_doc = db.rooms.find_one({"mac_address": anchor_id})
+                    if room_doc and room_doc.get("name"):
+                        room_name = room_doc.get("name")
+                    else:
+                        # 3) prova a risalire alla mac dell'anchor tramite anchors_online (anchor_id -> mac)
+                        anchor_mac = None
+                        for a_mac, a_info in anchors_online.items():
+                            if a_info.get("anchor_id") == anchor_id:
+                                anchor_mac = a_mac
+                                break
+                        if anchor_mac:
+                            room_doc = db.rooms.find_one({"mac_address": anchor_mac})
+                            if room_doc and room_doc.get("name"):
+                                room_name = room_doc.get("name")
+                        # 4) fallback: se non risolto, mostra l'anchor_id grezzo (utile per debug)
+                        if not room_name:
+                            room_name = anchor_id
 
-    # --- CERCA GPS COME FALLBACK ---
-    last_gps = db.positions.find_one(
-        {"pet_mac": normalize_mac(mac), "source": "gps"},
-        sort=[("timestamp", -1)]
-    )
-    if last_gps and last_gps.get("lat") and last_gps.get("lon"):
-        ts = last_gps.get("timestamp")
-        if isinstance(ts, str):
-            ts = isoparse(ts)
-        if ts and ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        if ts and ts.timestamp() >= cutoff:
-            gps_data = {"lat": float(last_gps["lat"]), "lon": float(last_gps["lon"])}
-            return jsonify({
-                "gps": gps_data,
-                "gps_last_seen": int(ts.timestamp())
-            })
+        # --- GPS: recupera ultima posizione specifica per pet dal DB (se esiste) ---
+        try:
+            last_pos = db.get_last_position(pet_id)
+            if last_pos and last_pos.get("lat") is not None and last_pos.get("lon") is not None:
+                gps = {"lat": float(last_pos["lat"]), "lon": float(last_pos["lon"])}
+                ts = last_pos.get("timestamp")
+                try:
+                    if hasattr(ts, "timestamp"):
+                        gps_last_seen = int(ts.timestamp())
+                    else:
+                        gps_last_seen = int(float(ts))
+                except Exception:
+                    gps_last_seen = None
+        except Exception:
+            gps = None
+            gps_last_seen = None
 
-    # --- SE NON TROVA NULLA ---
-    return jsonify({
-        "none": True,
-        "message": "Nessuna posizione disponibile"
-    })
-
-
+        return jsonify({
+            "room": room_name,
+            "room_last_seen": room_last_seen,
+            "gps": gps,
+            "gps_last_seen": gps_last_seen,
+            "pet_mac": mac
+        })
+    except Exception as e:
+        print("[GET_PET_LOCATION] Errore:", e)
+        return jsonify({"room": None, "room_last_seen": None, "gps": None, "gps_last_seen": None, "pet_mac": None})
     
 @app.route('/update_temp_thresholds/<pet_id>', methods=['POST'])
 @login_required
@@ -881,87 +892,73 @@ def detected_pets():
     pets.sort(key=lambda p: p.get("rssi", -200), reverse=True)
     return jsonify({"pets": pets})
 
+    pets = []
+    for mac_raw, info in pet_room_estimate.items():
+        mac_norm = normalize_mac(mac_raw) if mac_raw else None
+        # Se il MAC normalizzato è già registrato, saltalo
+        if mac_norm and mac_norm in registered_macs:
+            continue
+        pets.append({
+            "mac_address": mac_norm or mac_raw,
+            "bt_name": info.get("bt_name", ""),
+            "rssi": info.get("avg_rssi"),
+            "anchor_id": info.get("room"),
+            "last_seen": info.get("last_seen")
+        })
+    pets.sort(key=lambda p: p.get("rssi", -200), reverse=True)
+    return jsonify({"pets": pets})
 
+# app.py — modifica la route /localizza per passare anche la lista pets (con id stringa)
 @app.route('/localizza')
 @login_required
 def localizza():
+    # Passiamo alla pagina una mappa mac -> nome pet per poter mostrare etichette friendly
     user = auth_manager.get_user_info(session['username'])
     pets = db.get_pets_for_user(user['_id'])
-
+    pets_by_mac = {}
     simple_pets = []
     for p in pets:
         mac = p.get("mac_address")
-        gps_data = None
-        gps_available = False
-
-        if mac:
-            last_pos = db.positions.find_one({"pet_mac": mac}, sort=[("timestamp", -1)])
-            if last_pos and last_pos.get("lat") and last_pos.get("lon"):
-                gps_data = {"lat": float(last_pos["lat"]), "lon": float(last_pos["lon"])}
-                gps_available = True
-
+        name = p.get("name", "")
+        pets_by_mac[mac] = name
+        # crea versione serializzabile del pet da passare al template
         simple_pets.append({
             "_id": str(p.get("_id")),
-            "name": p.get("name", "Senza nome"),
-            "mac_address": mac,
-            "gps_available": gps_available,
-            "gps": gps_data
+            "name": name,
+            "mac_address": mac or ""
         })
 
-    return render_template('localizza.html', pets=simple_pets)
+    # Opzionale: mac iniziale del primo pet (se vuoi pre-selezionarlo)
+    mac_address = pets[0]['mac_address'] if pets else ''
+    return render_template('localizza.html',
+                           gps=latest_gps,
+                           pets_by_mac=pets_by_mac,
+                           mac_address=mac_address,
+                           pets=simple_pets)
 
 @app.route('/get_latest_env/<pet_id>')
 @login_required
 def get_latest_env(pet_id):
-    """
-    Restituisce l'ultima lettura ambientale cercando, nell'ordine:
-      1) MAC associato al pet (formato normalizzato con :)
-      2) pet_id (l'_id del documento pet)
-      3) fallback "global"
-    """
+    # Preferisci dato per pet_id, poi per mac associato al pet, poi global
     try:
-        # 1) prova per MAC associato al pet (PRIMA, perché i tuoi dati DB hanno pet_id = MAC)
-        env = None
-        try:
-            pet = db.get_pet_by_id(pet_id)
-        except Exception:
-            pet = None
-
-        if pet and pet.get("mac_address"):
-            mac_norm = normalize_mac(pet.get("mac_address"))
-            if mac_norm:
-                env = latest_env.get(mac_norm) or db.get_latest_env(mac_norm)
-            # prova anche senza i due punti (AABBCC..), nel caso in cui in DB sia salvato così
-            if not env and mac_norm and ':' in mac_norm:
-                mac_nocolon = mac_norm.replace(":", "")
-                env = latest_env.get(mac_nocolon) or db.get_latest_env(mac_nocolon)
-
-        # 2) se non trovato tramite MAC, prova per pet_id (chiave dell'app)
+        # 1) prova pet_id
+        env = latest_env.get(str(pet_id))
         if not env:
-            key_pet = str(pet_id)
-            env = latest_env.get(key_pet) or db.get_latest_env(key_pet)
-
-        # 3) fallback globale
+            env = db.get_latest_env(str(pet_id))
+        # 2) se non trovato, prova a risolvere mac dal pet doc e cercare per mac
+        if not env:
+            pet = db.get_pet_by_id(pet_id)
+            if pet and pet.get("mac_address"):
+                mac = normalize_mac(pet.get("mac_address"))
+                env = latest_env.get(mac) or db.get_latest_env(mac)
+        # 3) fallback global
         if not env:
             env = latest_env.get("global") or db.get_latest_env("global")
-
         if not env:
-            print(f"[GET_LATEST_ENV] Nessun env trovato (pet_id={pet_id})")
             return jsonify({"temp": None, "hum": None})
-
-        # assicurati di ritornare numeri o null
-        try:
-            temp_v = float(env.get("temp")) if env.get("temp") is not None else None
-        except Exception:
-            temp_v = None
-        try:
-            hum_v = float(env.get("hum")) if env.get("hum") is not None else None
-        except Exception:
-            hum_v = None
-
         return jsonify({
-            "temp": temp_v,
-            "hum": hum_v,
+            "temp": float(env.get("temp")) if env.get("temp") is not None else None,
+            "hum": float(env.get("hum")) if env.get("hum") is not None else None,
             "timestamp": env.get("timestamp")
         })
     except Exception as e:
@@ -969,18 +966,7 @@ def get_latest_env(pet_id):
         return jsonify({"temp": None, "hum": None})
 
 
-
 async def websocket_handler(websocket):
-    """
-    WebSocket handler aggiornato:
-      - inoltra i frame binari (streaming) a tutti i client
-      - gestisce control_command e frame testuali come prima
-      - normalizza il MAC se possibile
-      - aggiorna latest_gps per diagnostica ma salva in DB SOLO se risolto pet_id
-      - inoltra gps_update ai client SOLO se il messaggio contiene pet_id o pet_mac (evita gps anonimi che spostano marker)
-      - log diagnostici migliorati
-    Sostituisci la funzione esistente in app.py con questa versione e riavvia l'app.
-    """
     global latest_gps
     global current_is_outside, current_temp_high, current_temp_low, current_temp_value, current_temp_min, current_temp_max
     print(f"📡 Nuova connessione WebSocket da {websocket.remote_address}")
@@ -988,7 +974,7 @@ async def websocket_handler(websocket):
     try:
         async for message in websocket:
             try:
-                # FRAME BINARI (video) -> inoltra a tutti gli altri client
+                # FRAME BINARI -> inoltra a client (video)
                 if isinstance(message, (bytes, bytearray)):
                     for client in connected_clients.copy():
                         if client != websocket and getattr(client, "close_code", None) is None:
@@ -998,11 +984,11 @@ async def websocket_handler(websocket):
                                 print("[WS BIN FORWARD] Errore invio frame binario a client:", e)
                     continue
 
-                # JSON testuale
+                # testuale JSON
                 try:
                     data = json.loads(message)
                 except Exception:
-                    print("❌ JSON non valido ricevuto via WS (testuale)")
+                    print("❌ JSON non valido ricevuto via WS:", message if isinstance(message, str) else "<binario>")
                     continue
 
                 # control_command -> inoltra a tutti gli altri client
@@ -1015,7 +1001,6 @@ async def websocket_handler(websocket):
                                 print("[WS CMD] Errore invio control_command:", e)
                     continue
 
-                # sensor_data -> gestione gps / env / ecc.
                 if data.get("type") == "sensor_data":
                     # estrai GPS
                     lat = None
@@ -1027,32 +1012,19 @@ async def websocket_handler(websocket):
                         lat = data.get("lat")
                         lon = data.get("lon")
 
-                    # estrai identificatori (supporta pet_mac_ble / pet_mac / mac)
+                    # estrai identificatori (supporta pet_mac_ble)
                     pet_id = data.get("pet_id") or None
                     pet_mac_raw = data.get("pet_mac_ble") or data.get("pet_mac") or data.get("mac") or None
-                    # normalizza MAC se esiste helper normalize_mac, altrimenti minimo fallback
-                    if pet_mac_raw and callable(globals().get("normalize_mac")):
-                        pet_mac = normalize_mac(pet_mac_raw)
-                    elif pet_mac_raw:
-                        s = str(pet_mac_raw).strip().upper().replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                        pet_mac = ':'.join([s[i:i+2] for i in range(0, 12, 2)]) if len(s) == 12 else s
-                    else:
-                        pet_mac = None
-
+                    pet_mac = normalize_mac(pet_mac_raw) if pet_mac_raw else None
                     reported_bt_name = data.get("pet_name") or data.get("bt_name") or None
                     pet_doc = None
 
-                    # se abbiamo pet_id cerco doc sul DB e aggiorno pet_mac se disponibile
+                    # se abbiamo pet_id ricava doc/mac dal DB
                     if pet_id:
                         try:
                             pet_doc = db.get_pet_by_id(pet_id)
                             if pet_doc and pet_doc.get("mac_address"):
-                                if callable(globals().get("normalize_mac")):
-                                    pet_mac = normalize_mac(pet_doc.get("mac_address"))
-                                else:
-                                    rawm = str(pet_doc.get("mac_address")).strip().upper()
-                                    rawm = rawm.replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                                    pet_mac = ':'.join([rawm[i:i+2] for i in range(0, 12, 2)]) if len(rawm) == 12 else rawm
+                                pet_mac = normalize_mac(pet_doc.get("mac_address"))
                         except Exception:
                             pet_doc = None
 
@@ -1069,7 +1041,7 @@ async def websocket_handler(websocket):
                     # preferisci nome DB
                     pet_name = pet_doc.get("name") if pet_doc and pet_doc.get("name") else reported_bt_name
 
-                    # --- GPS handling: aggiorna latest_gps, salva SOLO se pet_id risolto, inoltra SOLO se identificato ---
+                    # --- GPS handling: SALVA SOLO SE hai un pet_id risolto ---
                     if lat is not None and lon is not None:
                         lat_f = None
                         lon_f = None
@@ -1077,10 +1049,10 @@ async def websocket_handler(websocket):
                             lat_f = float(lat)
                             lon_f = float(lon)
                         except Exception:
-                            print("[WS-GPS] Coordinate non numeriche ricevute:", lat, lon)
+                            print("[WS-GPS] Coordinate non numeriche:", lat, lon)
 
                         if lat_f is not None and lon_f is not None:
-                            # aggiorna latest_gps per diagnostica/server (non è assegnazione automatica a pet)
+                            # aggiorna latest_gps globale per info di debug/UI (ma non lo usiamo per assegnare posizioni ai pet)
                             latest_gps["lat"] = lat_f
                             latest_gps["lon"] = lon_f
                             latest_gps["ts"] = int(time.time())
@@ -1088,29 +1060,27 @@ async def websocket_handler(websocket):
                             gps_update = {
                                 "type": "gps_update",
                                 "lat": lat_f,
-                                "lon": lon_f
+                                "lon": lon_f,
+                                "pet_name": pet_name
                             }
                             if pet_id:
                                 gps_update["pet_id"] = pet_id
                             if pet_mac:
                                 gps_update["pet_mac"] = pet_mac
-                            if pet_name:
-                                gps_update["pet_name"] = pet_name
 
-                            # perimetro: calcola inside/outside solo per notifiche (non per associare posizione)
-                            try:
-                                perimeter_center = db.get_perimeter_center() or (45.123456, 9.123456)
-                                perimeter_radius = db.get_perimeter_radius() or 50
-                                lat_centro, lon_centro = perimeter_center
-                                inside = is_inside_circle(lat_f, lon_f, lat_centro, lon_centro, perimeter_radius)
-                            except Exception as e:
-                                print("[WS-GPS] Errore lettura perimetro:", e)
-                                inside = True
-
-                            entry_type = "zona_esterna_accessibile" if inside else "zona_esterna_non_accessibile"
-
-                            # SALVATAGGIO: salva la posizione GPS nel DB SOLO se abbiamo pet_id risolto
+                            # SALVATAGGIO: salva la posizione nel DB SOLO se risolvi pet_id
                             if pet_id:
+                                entry_type = "zona_esterna_accessibile"
+                                try:
+                                    # prova a calcolare in/out rispetto al perimetro
+                                    perimeter_center = db.get_perimeter_center() or (45.123456, 9.123456)
+                                    perimeter_radius = db.get_perimeter_radius() or 50
+                                    lat_centro, lon_centro = perimeter_center
+                                    inside = is_inside_circle(lat_f, lon_f, lat_centro, lon_centro, perimeter_radius)
+                                    entry_type = "zona_esterna_accessibile" if inside else "zona_esterna_non_accessibile"
+                                except Exception:
+                                    inside = True
+
                                 save_kwargs = {"lat": lat_f, "lon": lon_f, "source": "gps"}
                                 if pet_mac:
                                     save_kwargs["pet_mac"] = pet_mac
@@ -1119,10 +1089,10 @@ async def websocket_handler(websocket):
                                 except Exception as e:
                                     print("[WS-GPS] Errore salvataggio posizione:", e)
                             else:
-                                # diagnostico: fix GPS anonimo -> non salvo
-                                print("[WS-GPS] Fix GPS ricevuto ma nessuna associazione pet (no pet_id): non salvo in DB.")
+                                # diagnostico: fix GPS ricevuto ma nessuna associazione pet -> non salvare
+                                print("[WS-GPS] Fix GPS ricevuto ma pet non risolto (no pet_id/no pet_mac riconosciuto); non salvo in DB.")
 
-                            # Inoltro ai client: SOLO se abbiamo pet_id o pet_mac (evita gps anonimi che spostano marker)
+                            # IMPORTANT: inoltra ai client SOLO se abbiamo un identificatore (pet_id o pet_mac)
                             if pet_id or pet_mac:
                                 for client in connected_clients.copy():
                                     if getattr(client, "close_code", None) is None:
@@ -1131,37 +1101,8 @@ async def websocket_handler(websocket):
                                         except Exception as e:
                                             print("[WS SEND] Errore invio gps_update:", e)
                             else:
-                                # non inoltrare gps anonimo ai client
-                                print("[WS-GPS] GPS anonimo ricevuto: non inoltrato ai client per evitare sovrascritture globali.")
-
-                            # NOTIFICA SOLO SU TRANSIZIONE per evitare spam ripetuto (se pet_id è noto usiamo il documento)
-                            try:
-                                if pet_id:
-                                    prev_outside = current_is_outside
-                                    # aggiorna stato globale (utile ma notifiche per pet vanno legate a pet_id)
-                                    current_is_outside = not inside
-                                    gps_str = f"{lat_f:.6f}, {lon_f:.6f}"
-
-                                    # aggiorna soglie temperatura pet-specifiche se abbiamo il documento
-                                    if pet_doc:
-                                        current_temp_min = pet_doc.get("temp_min")
-                                        current_temp_max = pet_doc.get("temp_max")
-
-                                    if current_is_outside != prev_outside:
-                                        print(f"[WS-GPS] Transizione perimetro (prev={prev_outside} now={current_is_outside}), invio notify_events")
-                                        notify_events(
-                                            is_outside=current_is_outside,
-                                            temp_high=current_temp_high,
-                                            temp_low=current_temp_low,
-                                            gps=gps_str,
-                                            temp_value=current_temp_value,
-                                            temp_min=current_temp_min,
-                                            temp_max=current_temp_max,
-                                            pet_mac=pet_mac,
-                                            pet_name=pet_name
-                                        )
-                            except Exception as e:
-                                print("[WS-GPS] Errore notify_events:", e)
+                                # diagnosi: non inoltriamo gps anonimo ai client per evitare spostamenti di marker non corretti
+                                print("[WS-GPS] Fix GPS anonimo ricevuto: non inoltrato ai client.")
 
                     # --- environmental (temp/hum) ---
                     temp = None
@@ -1175,111 +1116,16 @@ async def websocket_handler(websocket):
                         hum = data.get("hum")
                     timestamp = data.get("timestamp", int(time.time()))
                     if temp is not None or hum is not None:
-                        # converti i valori numerici
+                        # salva env per pet se pet_id presente, altrimenti per 'global'
+                        target_key = pet_id if pet_id else "global"
+                        latest_env[target_key] = {"temp": temp, "hum": hum, "timestamp": timestamp}
                         try:
-                            temp_f = float(temp) if temp is not None else None
-                        except Exception:
-                            temp_f = None
-                        try:
-                            hum_f = float(hum) if hum is not None else None
-                        except Exception:
-                            hum_f = None
-
-                        # preferiamo mac normalizzato come key, altrimenti pet_id, altrimenti global
-                        raw_mac = data.get("pet_mac_ble") or data.get("pet_mac") or data.get("mac") or None
-                        if raw_mac and callable(globals().get("normalize_mac")):
-                            mac_norm = normalize_mac(raw_mac)
-                        elif raw_mac:
-                            s = str(raw_mac).strip().upper().replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                            mac_norm = ':'.join([s[i:i+2] for i in range(0, 12, 2)]) if len(s) == 12 else s
-                        else:
-                            mac_norm = None
-
-                        # prova a risolvere pet_doc a partire dal MAC normalizzato o pet_id
-                        pet_doc_env = None
-                        pet_id_env = None
-                        if mac_norm:
-                            pet_doc_env = db.pets.find_one({"mac_address": mac_norm})
-                            if pet_doc_env:
-                                pet_id_env = str(pet_doc_env["_id"])
-                        if not pet_doc_env and data.get("pet_id"):
-                            try:
-                                pet_doc_env = db.get_pet_by_id(data.get("pet_id"))
-                                if pet_doc_env:
-                                    pet_id_env = str(pet_doc_env["_id"])
-                                    if callable(globals().get("normalize_mac")) and pet_doc_env.get("mac_address"):
-                                        mac_norm = normalize_mac(pet_doc_env.get("mac_address"))
-                            except Exception:
-                                pet_doc_env = None
-
-                        if mac_norm:
-                            target_key = mac_norm
-                        elif pet_id_env:
-                            target_key = pet_id_env
-                        else:
-                            target_key = "global"
-
-                        latest_env[target_key] = {"temp": temp_f, "hum": hum_f, "timestamp": timestamp}
-                        try:
-                            db.save_env_data(target_key, temp_f, hum_f, datetime.fromtimestamp(timestamp, timezone.utc))
+                            db.save_env_data(target_key, temp, hum, datetime.fromtimestamp(timestamp, timezone.utc))
                         except Exception as e:
                             print("[WS-ENV] Errore salvataggio env:", e)
+                        print(f"[WS-ENV] Received env: target_key={target_key} temp={temp} hum={hum} mac_raw={pet_mac_raw} mac_norm={pet_mac}")
 
-                        print(f"[WS-ENV] Received env: target_key={target_key} temp={temp_f} hum={hum_f} mac_norm={mac_norm}")
-                        # 🔥 Inoltra aggiornamento ENV in tempo reale ai client dashboard
-                        try:
-                            env_update = {
-                                "type": "env_update",
-                                "pet_mac": mac_norm,
-                                "temp": temp_f,
-                                "hum": hum_f
-                            }
-                            import json
-                            for client in connected_clients.copy():
-                                if getattr(client, "close_code", None) is None:
-                                    try:
-                                        await client.send(json.dumps(env_update))
-                                    except Exception as e:
-                                        print("[WS-ENV] Errore invio env_update:", e)
-                        except Exception as e:
-                            print("[WS-ENV] Errore broadcast env_update:", e)
-
-                        # Valuta soglie se pet_doc_env presente
-                        try:
-                            if pet_doc_env:
-                                p_name = pet_doc_env.get("name")
-                                p_min = pet_doc_env.get("temp_min")
-                                p_max = pet_doc_env.get("temp_max")
-                                if temp_f is not None and (p_min is not None or p_max is not None):
-                                    over_high = (p_max is not None and temp_f > float(p_max))
-                                    under_low = (p_min is not None and temp_f < float(p_min))
-                                    if over_high or under_low:
-                                        print(f"[WS-ENV] Soglia superata per pet {p_name or mac_norm}: temp={temp_f} - invio notify")
-                                        gps_str = None
-                                        if latest_gps.get("lat") and latest_gps.get("lon"):
-                                            try:
-                                                gps_str = f"{float(latest_gps['lat']):.6f}, {float(latest_gps['lon']):.6f}"
-                                            except Exception:
-                                                gps_str = f"{latest_gps.get('lat')}, {latest_gps.get('lon')}"
-                                        notify_events(
-                                            is_outside=current_is_outside,
-                                            temp_high=over_high,
-                                            temp_low=under_low,
-                                            gps=gps_str,
-                                            temp_value=temp_f,
-                                            temp_min=p_min,
-                                            temp_max=p_max,
-                                            pet_mac=mac_norm,
-                                            pet_name=p_name
-                                        )
-                                    else:
-                                        print(f"[WS-ENV] Temperatura per {p_name or mac_norm} OK: {temp_f}°C (min={p_min} max={p_max})")
-                            else:
-                                print("[WS-ENV] Nessun pet trovato per il MAC ricevuto; nessuna soglia valutata.")
-                        except Exception as e:
-                            print("[WS-ENV] Errore controllo soglie:", e)
-
-                # heartbeat / frame / altri tipi
+                # altro: heartbeat / frame ...
                 elif data.get("type") == "heartbeat":
                     pass
                 elif data.get("type") == "frame":
@@ -1298,308 +1144,6 @@ async def websocket_handler(websocket):
         print(f"❌ Errore WebSocket: {e}")
     finally:
         connected_clients.discard(websocket)
-
-async def websocket_handler(websocket):
-    global latest_gps
-    global current_is_outside, current_temp_high, current_temp_low, current_temp_value, current_temp_min, current_temp_max
-    print(f"📡 Nuova connessione WebSocket da {websocket.remote_address}")
-    connected_clients.add(websocket)
-    try:
-        async for message in websocket:
-            try:
-                # FRAME BINARI (video) -> inoltra a tutti gli altri client
-                if isinstance(message, (bytes, bytearray)):
-                    for client in connected_clients.copy():
-                        if client != websocket and getattr(client, "close_code", None) is None:
-                            try:
-                                await client.send(message)
-                            except Exception as e:
-                                print("[WS BIN FORWARD] Errore invio frame binario a client:", e)
-                    continue
-
-                # JSON testuale
-                try:
-                    data = json.loads(message)
-                except Exception:
-                    print("❌ JSON non valido ricevuto via WS (testuale)")
-                    continue
-
-                # control_command -> inoltra
-                if data.get("type") == "control_command":
-                    for client in connected_clients.copy():
-                        if client != websocket and getattr(client, "close_code", None) is None:
-                            try:
-                                await client.send(json.dumps(data))
-                            except Exception as e:
-                                print("[WS CMD] Errore invio control_command:", e)
-                    continue
-
-                # sensor_data -> gestione gps / env / ecc.
-                if data.get("type") == "sensor_data":
-                    # estrai GPS
-                    lat = None
-                    lon = None
-                    if "gps" in data and isinstance(data["gps"], dict):
-                        lat = data["gps"].get("lat")
-                        lon = data["gps"].get("lon")
-                    elif "lat" in data and "lon" in data:
-                        lat = data.get("lat")
-                        lon = data.get("lon")
-
-                    # estrai identificatori
-                    pet_id = data.get("pet_id") or None
-                    pet_mac_raw = data.get("pet_mac_ble") or data.get("pet_mac") or data.get("mac") or None
-                    # usa normalize_mac se definita, altrimenti fallback minimale
-                    if pet_mac_raw and callable(globals().get("normalize_mac")):
-                        pet_mac = normalize_mac(pet_mac_raw)
-                    elif pet_mac_raw:
-                        s = str(pet_mac_raw).strip().upper().replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                        pet_mac = ':'.join([s[i:i+2] for i in range(0, 12, 2)]) if len(s) == 12 else s
-                    else:
-                        pet_mac = None
-
-                    reported_bt_name = data.get("pet_name") or data.get("bt_name") or None
-                    pet_doc = None
-
-                    # se abbiamo pet_id cerco doc sul DB e normalizzo mac se disponibile
-                    if pet_id:
-                        try:
-                            pet_doc = db.get_pet_by_id(pet_id)
-                            if pet_doc and pet_doc.get("mac_address"):
-                                if callable(globals().get("normalize_mac")):
-                                    pet_mac = normalize_mac(pet_doc.get("mac_address"))
-                                else:
-                                    rawm = str(pet_doc.get("mac_address")).strip().upper()
-                                    rawm = rawm.replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                                    pet_mac = ':'.join([rawm[i:i+2] for i in range(0, 12, 2)]) if len(rawm) == 12 else rawm
-                        except Exception:
-                            pet_doc = None
-
-                    # se abbiamo solo mac, prova a risolvere pet_id/doc
-                    if pet_mac and not pet_doc:
-                        try:
-                            resolved_id, resolved_doc = resolve_pet_by_mac(pet_mac)
-                            if resolved_id:
-                                pet_id = pet_id or resolved_id
-                                pet_doc = resolved_doc
-                        except Exception:
-                            pass
-
-                    # preferisci nome DB
-                    pet_name = pet_doc.get("name") if pet_doc and pet_doc.get("name") else reported_bt_name
-
-                    # --- GPS handling: aggiorna latest_gps, salva SOLO se pet_id risolto, inoltra SOLO se identificato ---
-                    if lat is not None and lon is not None:
-                        lat_f = None
-                        lon_f = None
-                        try:
-                            lat_f = float(lat)
-                            lon_f = float(lon)
-                        except Exception:
-                            print("[WS-GPS] Coordinate non numeriche ricevute:", lat, lon)
-
-                        if lat_f is not None and lon_f is not None:
-                            # aggiorna latest_gps per diagnostica/server (non è assegnazione automatica a pet)
-                            latest_gps["lat"] = lat_f
-                            latest_gps["lon"] = lon_f
-                            latest_gps["ts"] = int(time.time())
-
-                            gps_update = {
-                                "type": "gps_update",
-                                "lat": lat_f,
-                                "lon": lon_f
-                            }
-                            if pet_id:
-                                gps_update["pet_id"] = pet_id
-                            if pet_mac:
-                                gps_update["pet_mac"] = pet_mac
-                            if pet_name:
-                                gps_update["pet_name"] = pet_name
-
-                            # perimetro: calcola inside/outside
-                            try:
-                                perimeter_center = db.get_perimeter_center() or (45.123456, 9.123456)
-                                perimeter_radius = db.get_perimeter_radius() or 50
-                                lat_centro, lon_centro = perimeter_center
-                                inside = is_inside_circle(lat_f, lon_f, lat_centro, lon_centro, perimeter_radius)
-                            except Exception as e:
-                                print("[WS-GPS] Errore lettura perimetro:", e)
-                                inside = True
-
-                            entry_type = "zona_esterna_accessibile" if inside else "zona_esterna_non_accessibile"
-
-                            # SALVATAGGIO: salva la posizione GPS nel DB SOLO se abbiamo pet_id risolto
-                            if pet_id:
-                                save_kwargs = {"lat": lat_f, "lon": lon_f, "source": "gps"}
-                                if pet_mac:
-                                    save_kwargs["pet_mac"] = pet_mac
-                                try:
-                                    db.save_position(pet_id=pet_id, entry_type=entry_type, **save_kwargs)
-                                    # aggiorna stato locale e notifica su transizione
-                                except Exception as e:
-                                    print("[WS-GPS] Errore salvataggio posizione:", e)
-                            else:
-                                # diagnostico: fix GPS anonimo -> non salvo
-                                print("[WS-GPS] Fix GPS ricevuto ma nessuna associazione pet (no pet_id): non salvo in DB.")
-
-                            # Inoltro ai client: SOLO se abbiamo pet_id o pet_mac (evita gps anonimi che spostano marker)
-                            if pet_id or pet_mac:
-                                for client in connected_clients.copy():
-                                    if getattr(client, "close_code", None) is None:
-                                        try:
-                                            await client.send(json.dumps(gps_update))
-                                        except Exception as e:
-                                            print("[WS SEND] Errore invio gps_update:", e)
-                            else:
-                                # non inoltrare gps anonimo ai client
-                                print("[WS-GPS] GPS anonimo ricevuto: non inoltrato ai client per evitare sovrascritture globali.")
-
-                            # NOTIFICA SOLO SU TRANSIZIONE per evitare spam ripetuto (se pet_id è noto usiamo il documento)
-                            try:
-                                prev_outside = current_is_outside
-                                current_is_outside = not inside
-                                gps_str = f"{lat_f}, {lon_f}"
-
-                                # aggiorna soglie temperatura pet-specifiche se abbiamo il documento
-                                if pet_doc:
-                                    current_temp_min = pet_doc.get("temp_min")
-                                    current_temp_max = pet_doc.get("temp_max")
-
-                                if pet_id and (current_is_outside != prev_outside):
-                                    print(f"[WS-GPS] Transizione perimetro (prev={prev_outside} now={current_is_outside}), invio notify_events")
-                                    notify_events(
-                                        is_outside=current_is_outside,
-                                        temp_high=current_temp_high,
-                                        temp_low=current_temp_low,
-                                        gps=gps_str,
-                                        temp_value=current_temp_value,
-                                        temp_min=current_temp_min,
-                                        temp_max=current_temp_max,
-                                        pet_mac=pet_mac,
-                                        pet_name=pet_name
-                                    )
-                            except Exception as e:
-                                print("[WS-GPS] Errore notify_events:", e)
-
-                    # --- environmental (temp/hum) ---
-                    temp = None
-                    hum = None
-                    if "environmental" in data and isinstance(data["environmental"], dict):
-                        temp = data["environmental"].get("temperature")
-                        hum = data["environmental"].get("humidity")
-                    if "temp" in data:
-                        temp = data.get("temp")
-                    if "hum" in data:
-                        hum = data.get("hum")
-                    timestamp = data.get("timestamp", int(time.time()))
-                    if temp is not None or hum is not None:
-                        # converti i valori numerici
-                        try:
-                            temp_f = float(temp) if temp is not None else None
-                        except Exception:
-                            temp_f = None
-                        try:
-                            hum_f = float(hum) if hum is not None else None
-                        except Exception:
-                            hum_f = None
-
-                        # preferiamo mac normalizzato come key, altrimenti pet_id, altrimenti global
-                        raw_mac = data.get("pet_mac_ble") or data.get("pet_mac") or data.get("mac") or None
-                        if raw_mac and callable(globals().get("normalize_mac")):
-                            mac_norm = normalize_mac(raw_mac)
-                        elif raw_mac:
-                            s = str(raw_mac).strip().upper().replace("-", "").replace(".", "").replace(":", "").replace(" ", "")
-                            mac_norm = ':'.join([s[i:i+2] for i in range(0, 12, 2)]) if len(s) == 12 else s
-                        else:
-                            mac_norm = None
-
-                        # prova a risolvere pet_doc a partire dal MAC normalizzato o pet_id
-                        pet_doc_env = None
-                        pet_id_env = None
-                        if mac_norm:
-                            pet_doc_env = db.pets.find_one({"mac_address": mac_norm})
-                            if pet_doc_env:
-                                pet_id_env = str(pet_doc_env["_id"])
-                        if not pet_doc_env and data.get("pet_id"):
-                            try:
-                                pet_doc_env = db.get_pet_by_id(data.get("pet_id"))
-                                if pet_doc_env:
-                                    pet_id_env = str(pet_doc_env["_id"])
-                                    if callable(globals().get("normalize_mac")) and pet_doc_env.get("mac_address"):
-                                        mac_norm = normalize_mac(pet_doc_env.get("mac_address"))
-                            except Exception:
-                                pet_doc_env = None
-
-                        if mac_norm:
-                            target_key = mac_norm
-                        elif pet_id_env:
-                            target_key = pet_id_env
-                        else:
-                            target_key = "global"
-
-                        latest_env[target_key] = {"temp": temp_f, "hum": hum_f, "timestamp": timestamp}
-                        try:
-                            db.save_env_data(target_key, temp_f, hum_f, datetime.fromtimestamp(timestamp, timezone.utc))
-                        except Exception as e:
-                            print("[WS-ENV] Errore salvataggio env:", e)
-
-                        print(f"[WS-ENV] Received env: target_key={target_key} temp={temp_f} hum={hum_f} mac_norm={mac_norm}")
-
-                        # Valuta soglie se pet_doc_env presente
-                        try:
-                            if pet_doc_env:
-                                p_name = pet_doc_env.get("name")
-                                p_min = pet_doc_env.get("temp_min")
-                                p_max = pet_doc_env.get("temp_max")
-                                if temp_f is not None and (p_min is not None or p_max is not None):
-                                    over_high = (p_max is not None and temp_f > float(p_max))
-                                    under_low = (p_min is not None and temp_f < float(p_min))
-                                    if over_high or under_low:
-                                        print(f"[WS-ENV] Soglia superata per pet {p_name or mac_norm}: temp={temp_f} - invio notify")
-                                        gps_str = None
-                                        if latest_gps.get("lat") and latest_gps.get("lon"):
-                                            try:
-                                                gps_str = f"{float(latest_gps['lat']):.6f}, {float(latest_gps['lon']):.6f}"
-                                            except Exception:
-                                                gps_str = f"{latest_gps.get('lat')}, {latest_gps.get('lon')}"
-                                        notify_events(
-                                            is_outside=current_is_outside,
-                                            temp_high=over_high,
-                                            temp_low=under_low,
-                                            gps=gps_str,
-                                            temp_value=temp_f,
-                                            temp_min=p_min,
-                                            temp_max=p_max,
-                                            pet_mac=mac_norm,
-                                            pet_name=p_name
-                                        )
-                                    else:
-                                        print(f"[WS-ENV] Temperatura per {p_name or mac_norm} OK: {temp_f}°C (min={p_min} max={p_max})")
-                            else:
-                                print("[WS-ENV] Nessun pet trovato per il MAC ricevuto; nessuna soglia valutata.")
-                        except Exception as e:
-                            print("[WS-ENV] Errore controllo soglie:", e)
-
-                # heartbeat / frame / altri tipi
-                elif data.get("type") == "heartbeat":
-                    pass
-                elif data.get("type") == "frame":
-                    for client in connected_clients.copy():
-                        if client != websocket and getattr(client, "close_code", None) is None:
-                            try:
-                                await client.send(message)
-                            except Exception as e:
-                                print("[WS FRAME] Errore inoltro frame:", e)
-
-            except json.JSONDecodeError:
-                print("❌ JSON non valido")
-            except Exception as e:
-                print("❌ Errore interno handler WS:", e)
-    except Exception as e:
-        print(f"❌ Errore WebSocket: {e}")
-    finally:
-        connected_clients.discard(websocket)
-
 
 async def run_ws_server():
     global main_asyncio_loop
@@ -1704,52 +1248,25 @@ def on_mqtt_message(client, userdata, msg):
                     if win and len(win) == 3:
                         avg = sum(win) / 3.0
                         now_t = time.time()
-                        #print(f"[MQTT] AVG calcolata per {pet_mac} su ancora {anchor_id}: {avg:.1f} dBm (threshold {RSSI_THRESHOLD})")
+                        print(f"[MQTT] AVG calcolata per {pet_mac} su ancora {anchor_id}: {avg:.1f} dBm (threshold {RSSI_THRESHOLD})")
                         if avg >= RSSI_THRESHOLD:
                             # Risolvi pet_id dal documento (userà ObjectId string)
+                            print("salvataggio posizione BLE per pet_mac", pet_mac, "anchor", anchor_id, "rssi", avg)
                             pet_id = str(pet_doc["_id"])
                             last = last_ble_state.get(pet_mac)
                             if (not last) or (last["room"] != anchor_id) or (now_t - last["t"] >= BLE_EVENT_COOLDOWN_SEC):
                                 allowed, room_doc = room_allowed_for_anchor(anchor_id)
                                 entry_type = "stanza_accessibile" if allowed else "stanza_non_accessibile"
-                                # --- risolvi il nome della stanza dall'anchor MAC ---
-                                room_name = anchor_id  # valore di default
-                                try:
-                                    # cerca se l'anchor è registrata in anchors_online e trova il suo MAC
-                                    anchor_mac = None
-                                    for mac, info in anchors_online.items():
-                                        if info.get("anchor_id") == anchor_id:
-                                            anchor_mac = mac
-                                            break
-
-                                    # se trovato, cerca nella collezione rooms
-                                    if anchor_mac:
-                                        room_doc = db.rooms.find_one({"mac_address": anchor_mac})
-                                        if room_doc and room_doc.get("name"):
-                                            room_name = room_doc["name"]
-                                except Exception as e:
-                                    print(f"[BLE MAP] Errore durante lookup stanza per anchor {anchor_id}: {e}")
-
-                                # --- risolvi il nome del pet partendo da bt_name ---
-                                pet_name_final = bt_name
-                                try:
-                                    pet_doc = db.pets.find_one({"bt_name": bt_name})
-                                    if pet_doc and pet_doc.get("name"):
-                                        pet_name_final = pet_doc["name"]
-                                except Exception as e:
-                                    print(f"[BLE MAP] Errore durante lookup pet name per {bt_name}: {e}")
-
-                                # --- ora salva con i campi risolti ---
                                 try:
                                     db.save_position(
                                         pet_id=pet_id,
                                         entry_type=entry_type,
                                         source="ble",
-                                        room=room_name,   # <-- ora 'cucina' invece di 'ancora1'
+                                        room=anchor_id,
                                         rssi=avg,
-                                        pet_name=pet_name_final  # <-- ora 'Billy' invece di 'PET1'
+                                        bt_name=bt_name
                                     )
-                                    print(f"[BLE SAVE] OK: stanza={room_name}, pet={pet_name_final}, rssi={avg:.1f}")
+                                    print(f"[BLE SAVE] OK: posizione BLE salvata per pet_id={pet_id} room={anchor_id} rssi={avg:.1f}")
                                 except Exception as e:
                                     print("[BLE SAVE] ERRORE durante save_position:", e)
 

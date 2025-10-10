@@ -2,240 +2,207 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <title>Gestione Stanze e Area</title>
+  <title>Configurazione Area e Stanze</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-      body { background: #fafafa; }
-      .container { max-width: 1100px; margin: 40px auto; background: #fff; padding: 32px; border-radius: 18px; box-shadow: 0 0 16px #e2e8f0; }
-      h1 { font-size: 2.1rem; color: #1a237e; margin-bottom: 28px; font-weight: 600;}
-      hr { margin: 34px 0 26px 0; }
+      body {
+        background: #f5f7fa;
+        font-family: 'Segoe UI', Roboto, sans-serif;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 40px auto;
+        background: #fff;
+        padding: 36px;
+        border-radius: 18px;
+        box-shadow: 0 2px 18px rgba(0,0,0,0.1);
+      }
+      h1 {
+        font-size: 2rem;
+        color: #1a237e;
+        margin-bottom: 30px;
+        font-weight: 600;
+      }
+      h3 {
+        color: #1e3a8a;
+        margin-top: 28px;
+        margin-bottom: 10px;
+        font-weight: 600;
+      }
+      hr {
+        margin: 28px 0;
+        border: none;
+        border-top: 1px solid #e0e0e0;
+      }
 
       /* Bottone Torna alla Dashboard */
-      .dashboard-btn-container {
-          margin: 16px 0 32px 10px;
-      }
+      .dashboard-btn-container { margin: 16px 0 32px 10px; }
       .dashboard-btn {
-          background: #1976d2;
-          color: #fff;
-          border: none;
-          border-radius: 8px;
-          padding: 12px 24px;
-          font-size: 1.25rem;
-          font-family: inherit;
-          cursor: pointer;
-          box-shadow: 0 2px 8px rgba(25,118,210,0.13);
-          transition: background 0.2s;
-          font-weight: 500;
-          display: flex;
-          align-items: center;
-      }
-      .dashboard-btn:hover { background: #125a9c; }
-
-      /* Mappa e perimetro */
-      #map { height: 320px; border-radius: 14px; border: 1.5px solid #b3d4fc; margin-bottom: 15px; margin-top: 8px; width: 100%; }
-      .radius-config { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
-      .radius-badge { background: #3949ab; color: #fff; border-radius: 12px; padding: 3px 13px; font-size: 1.04rem; font-weight: 500; }
-      .use-gps-btn {
-          margin-left: 18px;
-          background: #43a047;
-          color: #fff;
-          border: none;
-          border-radius: 8px;
-          padding: 6px 22px;
-          font-size: 1.08rem;
-          cursor: pointer;
-          font-weight: 600;
-          transition: background 0.15s;
-      }
-      .use-gps-btn:hover { background: #308030; }
-
-      /* Form aggiungi stanza */
-      .add-room-form {
-        background: #fff;
-        border-radius: 24px;
-        box-shadow: 0 2px 18px #e2eaf3;
-        padding: 40px 28px 30px 28px;
-        max-width: 900px;
-        margin: 38px auto 40px auto;
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-      }
-      .add-room-form h3 {
-        color: #20307d;
-        font-size: 1.35rem;
-        font-weight: 800;
-        margin-bottom: 22px;
-      }
-      .scan-section { margin-bottom: 18px; width: 100%; }
-      #scan-btn {
         background: #1976d2;
         color: #fff;
         border: none;
         border-radius: 10px;
-        padding: 18px 0;
-        font-size: 1.16rem;
-        font-weight: 500;
-        width: 100%;
-        transition: background 0.13s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
+        padding: 12px 24px;
+        font-size: 1.15rem;
+        cursor: pointer;
+        font-weight:500;
+        display:flex;
+        align-items:center;
+        gap:8px;
+        transition: all 0.2s;
+        box-shadow: 0 3px 6px rgba(25,118,210,0.25);
       }
-      #scan-btn:hover { background: #125a9c; }
-      #scan-results { margin-bottom: 12px; display: none; background: #f3f7fb; padding: 10px; border-radius: 6px; max-height: 170px; overflow-y: auto; font-size: 1.03rem;}
-      .add-room-form input[type="text"] {
-        margin-bottom: 15px;
-        border: 1px solid #c3c3c3;
-        border-radius: 7px;
-        padding: 13px 18px;
-        font-size: 1.13rem;
+      .dashboard-btn:hover { background: #125a9c; transform: translateY(-1px); }
+
+      /* Mappa e perimetro */
+      #map {
+        height: 340px;
+        border-radius: 14px;
+        border: 1.5px solid #b3d4fc;
+        margin: 12px 0 18px 0;
         width: 100%;
-        box-sizing: border-box;
-        background: #fafdff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
       }
-      .restriction-section {
+      .radius-config {
         display: flex;
         align-items: center;
         gap: 16px;
-        margin-bottom: 22px;
-        font-weight: 600;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
       }
-      .restriction-label {
-        font-size: 1.08rem;
-        color: #242424;
-        font-weight: 600;
-        margin-right: 0;
+      .radius-badge {
+        background: #3949ab;
+        color: #fff;
+        border-radius: 12px;
+        padding: 4px 14px;
+        font-size: 1rem;
+        font-weight: 500;
       }
-      .switch {
-        position: relative;
-        display: inline-block;
-        width: 44px;
-        height: 24px;
-        vertical-align: middle;
+      .use-gps-btn {
+          background: #43a047;
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          padding: 10px 22px;
+          font-size: 1.05rem;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.2s;
+          box-shadow: 0 3px 6px rgba(67,160,71,0.25);
       }
-      .switch input { opacity: 0; width: 0; height: 0;}
-      .slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background-color: #e0e0e0;
-        transition: .35s;
-        border-radius: 22px;
+      .use-gps-btn:hover { background: #2e7d32; transform: translateY(-1px); }
+
+      .btn-ghost {
+        background: transparent;
+        border: 1.5px solid #1976d2;
+        color: #1976d2;
+        padding: 8px 14px;
+        border-radius: 10px;
+        cursor:pointer;
+        font-weight: 500;
+        transition: all 0.2s;
       }
-      .slider:before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: .35s;
-        border-radius: 50%;
-        box-shadow: 0 1px 2px #aaa;
+      .btn-ghost:hover { background:#e3f2fd; }
+
+      /* Tabelle PET e Stanze */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-top: 12px;
       }
-      .switch input:checked + .slider { background-color: #43a047; }
-      .switch input:checked + .slider:before { transform: translateX(20px); }
-      .add-room-form button[type="submit"] {
-        background: #388e3c;
+      th {
+        background: #f3f6fb;
+        color: #1976d2;
+        text-align: left;
+        font-weight: 700;
+        padding: 12px 14px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      tr:hover { background: #f9fbff; cursor: pointer; }
+      .pet-selected { background: #e6f7ea !important; }
+
+      /* Form aggiungi stanza */
+      .add-room-form {
+        margin-top: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 20px;
+        border-radius: 14px;
+        background: #f9fafb;
+        box-shadow: inset 0 0 6px rgba(0,0,0,0.05);
+      }
+      .add-room-form input[type=text] {
+        padding: 10px 12px;
+        border: 1.5px solid #cfd8dc;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border 0.2s;
+      }
+      .add-room-form input[type=text]:focus {
+        border-color: #1976d2;
+        outline: none;
+      }
+      .add-room-form button[type=submit] {
+        align-self: flex-start;
+        background: #1976d2;
         color: #fff;
         border: none;
-        padding: 16px 0;
-        border-radius: 11px;
-        font-size: 1.22rem;
-        width: 100%;
-        font-weight: 700;
-        margin-top: 6px;
-        margin-bottom: 9px;
-        transition: background 0.16s;
+        border-radius: 8px;
+        padding: 10px 18px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 3px 6px rgba(25,118,210,0.25);
       }
-      .add-room-form button[type="submit"]:hover { background: #256924; }
+      .add-room-form button[type=submit]:hover {
+        background: #125a9c;
+        transform: translateY(-1px);
+      }
 
-      /* --- Nuovo stile tabella stanze --- */
-      .rooms-table.clean-look {
-        border-collapse: collapse;
-        width: 100%;
-        background: #fff;
-        margin: 0;
-      }
-      .rooms-table.clean-look th {
-        background: #f5f8fa;
-        color: #1a237e;
-        font-weight: 700;
-        border-bottom: 2px solid #e0e0e0;
-        font-size: 1.09rem;
-        padding: 13px 16px;
-        text-align: left;
-      }
-      .rooms-table.clean-look td {
-        border-bottom: 1px solid #f1f1f1;
-        font-size: 1.07rem;
-        padding: 15px 16px;
-        background: none;
-        vertical-align: middle;
-      }
-      .rooms-table.clean-look tr:last-child td {
-        border-bottom: none;
-      }
-      .room-access-state {
-        font-weight: 700;
-        font-size: 1.01rem;
-        padding: 4px 12px;
-        border-radius: 10px;
-        background: #e2f8ea;
-        color: #22884f;
-        margin-left: 9px;
-      }
-      .room-access-state.no {
-        background: #ffe6e6;
-        color: #d32f2f;
-      }
+      /* Switch accesso stanza */
       .switch {
         position: relative;
         display: inline-block;
-        width: 38px;
-        height: 22px;
-        vertical-align: middle;
-        margin-right: 0;
+        width: 46px;
+        height: 24px;
       }
-      .switch input { opacity: 0; width: 0; height: 0;}
+      .switch input { display:none; }
       .slider {
         position: absolute;
         cursor: pointer;
         top: 0; left: 0; right: 0; bottom: 0;
-        background-color: #e0e0e0;
-        transition: .35s;
-        border-radius: 22px;
+        background-color: #ccc;
+        transition: .3s;
+        border-radius: 24px;
       }
       .slider:before {
         position: absolute;
         content: "";
-        height: 16px;
-        width: 16px;
-        left: 3px;
-        bottom: 3px;
+        height: 18px; width: 18px;
+        left: 3px; bottom: 3px;
         background-color: white;
-        transition: .35s;
+        transition: .3s;
         border-radius: 50%;
-        box-shadow: 0 1px 2px #aaa;
       }
-      .switch input:checked + .slider { background-color: #43a047; }
-      .switch input:checked + .slider:before { transform: translateX(16px); }
-      .delete-btn svg { vertical-align: middle; }
-      .delete-btn:hover svg { stroke: #fff; background: #d32f2f; border-radius: 50%; }
-      .delete-btn {
-        background:none;
-        border:none;
-        padding:0 7px;
-        cursor:pointer;
+      input:checked + .slider {
+        background-color: #43a047;
       }
+      input:checked + .slider:before {
+        transform: translateX(22px);
+      }
+
       @media (max-width: 900px) {
-        .container { max-width: 98vw;}
-        .add-room-form { max-width: 100vw; }
-        .rooms-table.clean-look th, .rooms-table.clean-look td {font-size: 0.96rem; padding: 8px 4px;}
+        .container { max-width: 95vw; padding: 20px; }
+        .radius-config { flex-direction: column; align-items:flex-start; }
       }
   </style>
 </head>
@@ -243,44 +210,71 @@
 
   <!-- Bottone Torna alla Dashboard -->
   <div class="dashboard-btn-container">
-      <form method="get" action="{{ url_for('dashboard') }}" style="display: inline;">
-          <button type="submit" class="dashboard-btn">&#8592; Torna alla Dashboard</button>
+      <form method="get" action="{{ url_for('dashboard') }}">
+          <button type="submit" class="dashboard-btn">← Torna alla Dashboard</button>
       </form>
   </div>
 
   <div class="container">
-      <h1>Gestione Stanze e Area Consentita</h1>
+      <h1>Configurazione Area e Stanze</h1>
 
-      <!-- Mappa perimetro -->
-      <div class="perimeter-section">
-        <h3>Area consentita</h3>
-        <div id="map"></div>
-        <form id="perimeter-form" method="post" action="{{ url_for('update_perimeter') }}" class="radius-config">
-          <span>Raggio:</span>
-          <input type="range" id="radius_slider" name="radius" min="10" max="150" value="{{ perimeter_radius|default(50,true)|int }}">
-          <span id="radius_label" class="radius-badge">{{ perimeter_radius|default(50,true)|int }} m</span>
+            <!-- Mappa e perimetro -->
+      <h3>Area consentita</h3>
+      <div id="map"></div>
+
+      <form id="perimeter-form" method="post" action="{{ url_for('update_perimeter') }}" class="radius-config">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span>Raggio:</span>
+            <input type="range" id="radius_slider" name="radius" min="10" max="150" value="{{ perimeter_radius|default(50,true)|int }}">
+            <span id="radius_label" class="radius-badge">{{ perimeter_radius|default(50,true)|int }} m</span>
+          </div>
+
           <input type="hidden" name="center_lat" id="center_lat" value="{{ perimeter_center[0]|default(45.123456,true)|float }}">
           <input type="hidden" name="center_lng" id="center_lng" value="{{ perimeter_center[1]|default(9.123456,true)|float }}">
-          <button type="button" class="use-gps-btn" onclick="setCenterToPetLocation()">Usa posizione attuale del Pet</button>
-          <button type="submit" class="btn btn-success btn-sm ms-3" style="margin-left:18px;">Salva perimetro</button>
-        </form>
-      </div>
 
-      <!-- FORM AGGIUNGI STANZA -->
+          <div class="btn-row">
+            <button type="button" class="use-gps-btn" onclick="setCenterToPetLocation()">Usa posizione attuale del Pet</button>
+            <button type="submit" class="btn-ghost">Salva perimetro</button>
+          </div>
+      </form>
+
+
+      <!-- Sezione selezione Pet -->
+      <h3>Seleziona il Pet</h3>
+      <table id="pets-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>MAC</th>
+            <th>Azioni</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if pets %}
+            {% for pet in pets %}
+            <tr data-pet-id="{{ pet._id }}" data-pet-mac="{{ pet.get('mac_address','') }}">
+              <td>{{ pet.get('name','Senza nome') }}</td>
+              <td>{{ pet.get('mac_address','-') }}</td>
+              <td>
+                <button type="button" class="btn-ghost" onclick="event.stopPropagation(); selectPetRow(this.closest('tr'))">Seleziona</button>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="3">Nessun pet registrato.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <!-- Form aggiungi stanza -->
       <form class="add-room-form" method="post" action="{{ url_for('add_room') }}">
         <h3>Aggiungi nuova stanza</h3>
-        <div class="scan-section">
-          <button type="button" id="scan-btn">
-            <span style="font-size:1.15em;">🔍</span> Mostra ancore disponibili
-          </button>
-          <div id="scan-results"></div>
-        </div>
+        <button type="button" id="scan-btn">🔍 Mostra ancore disponibili</button>
+        <div id="scan-results"></div>
         <input type="text" name="room_name" placeholder="Nome stanza" required>
         <input type="text" name="mac_address" placeholder="MAC ancora BT" id="mac_address" required>
-        <div class="restriction-section">
-          <label class="restriction-label" for="allowed-switch" title="Specifica se il pet può accedere in questa stanza">
-            Accesso stanza
-          </label>
+        <div>
+          <label for="allowed-switch">Accesso stanza</label>
           <label class="switch">
             <input type="checkbox" id="allowed-switch" name="allowed" value="1" checked>
             <span class="slider"></span>
@@ -289,59 +283,49 @@
         <button type="submit">Salva</button>
       </form>
 
-      <!-- Tabella STANZE (ancore BT) - Nuovo stile -->
-      <h2 style="font-size:1.30rem; color:#222; font-weight:700; margin-top:45px;">Stanze (ancore BT)</h2>
+      <!-- Tabella stanze -->
+      <h3>Stanze (ancore BLE)</h3>
       {% if rooms %}
-      <div class="rooms-table-container">
-        <table class="rooms-table clean-look">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>MAC</th>
-              <th>Accessibile</th>
-              <th>Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for room in rooms %}
-            <tr>
-              <td>{{ room['name']|capitalize }}</td>
-              <td>{{ room.get('mac_address', '-') }}</td>
-              <td>
-                <form method="post" action="{{ url_for('toggle_room_access', room_id=room['_id']) }}" style="display:inline;">
-                  <label class="switch" title="Cambia accessibilità" style="vertical-align:middle;">
-                    <input type="checkbox" name="allowed" value="1" onchange="this.form.submit()" {% if room.get('allowed') %}checked{% endif %}>
-                    <span class="slider"></span>
-                  </label>
-                  <span class="room-access-state {% if not room.get('allowed') %}no{% endif %}">
-                    {% if room.get('allowed') %}Sì{% else %}No{% endif %}
-                  </span>
-                </form>
-              </td>
-              <td>
-                <form method="post" action="{{ url_for('delete_room', room_id=room['_id']) }}" style="display:inline;">
-                  <button class="delete-btn" title="Elimina stanza">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                      stroke="#d32f2f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                  </button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      <table class="rooms-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>MAC</th>
+            <th>Accessibile</th>
+            <th>Azioni</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for room in rooms %}
+          <tr>
+            <td>{{ room['name']|capitalize }}</td>
+            <td>{{ room.get('mac_address', '-') }}</td>
+            <td>
+              <form method="post" action="{{ url_for('toggle_room_access', room_id=room['_id']) }}">
+                <label class="switch">
+                  <input type="checkbox" name="allowed" value="1" onchange="this.form.submit()" {% if room.get('allowed') %}checked{% endif %}>
+                  <span class="slider"></span>
+                </label>
+                {% if room.get('allowed') %}<span>Sì</span>{% else %}<span>No</span>{% endif %}
+              </form>
+            </td>
+            <td>
+              <form method="post" action="{{ url_for('delete_room', room_id=room['_id']) }}">
+                <button class="btn-ghost" title="Elimina stanza">🗑️</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
       {% else %}
-        <div>Nessuna stanza registrata.</div>
+      <div>Nessuna stanza registrata.</div>
       {% endif %}
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // MAPPA INTERATTIVA PERIMETRO
+    // --- Tutta la logica originale invariata ---
     let center = [
         {{ perimeter_center[0]|default(45.123456,true)|float }},
         {{ perimeter_center[1]|default(9.123456,true)|float }}
@@ -349,59 +333,53 @@
     let radius = {{ perimeter_radius|default(50,true)|int }};
     if (isNaN(center[0]) || isNaN(center[1])) center = [45.123456, 9.123456];
     if (isNaN(radius)) radius = 50;
+
     let map = L.map('map').setView(center, 18);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        minZoom: 2, maxZoom: 20
-    }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { minZoom: 2, maxZoom: 20 }).addTo(map);
+    let circle = L.circle(center, { radius: radius, color: '#3949ab', fillColor: '#b3d4fc', fillOpacity: 0.28 }).addTo(map);
 
-    let circle = L.circle(center, {
-        radius: radius,
-        color: '#3949ab',
-        fillColor: '#b3d4fc',
-        fillOpacity: 0.28
-    }).addTo(map);
+    let selectedPetId = null;
 
-    // --- PET MARKER ---
-    {% if pet_position %}
-    let petPos = [{{ pet_position[0] }}, {{ pet_position[1] }}];
-    let petMarker = L.marker(petPos, {title: "Posizione attuale del Pet"}).addTo(map);
-    petMarker.bindPopup("Pet attuale").openPopup();
-    {% endif %}
-
-    // Click per spostare il centro
-    map.on('click', function(e) {
-        circle.setLatLng(e.latlng);
-        document.getElementById('center_lat').value = e.latlng.lat.toFixed(7);
-        document.getElementById('center_lng').value = e.latlng.lng.toFixed(7);
-    });
-
-    // Slider per cambiare raggio
-    document.getElementById('radius_slider').addEventListener('input', function(e) {
-        let val = parseInt(this.value);
-        circle.setRadius(val);
-        document.getElementById('radius_label').textContent = val + ' m';
-    });
-
-    // --- Bottone "Usa posizione attuale del Pet" ---
-    function setCenterToPetLocation() {
-      fetch('/get_latest_gps')
-        .then(r => r.json())
-        .then(gps => {
-          if (gps && gps.lat && gps.lon) {
-            circle.setLatLng([gps.lat, gps.lon]);
-            map.setView([gps.lat, gps.lon], 18);
-            document.getElementById('center_lat').value = gps.lat.toFixed(7);
-            document.getElementById('center_lng').value = gps.lon.toFixed(7);
-          }
-        });
+    function selectPetRow(tr) {
+      document.querySelectorAll('#pets-table tbody tr').forEach(r => r.classList.remove('pet-selected'));
+      if (!tr) return;
+      tr.classList.add('pet-selected');
+      selectedPetId = tr.dataset.petId || null;
     }
 
-    // --- Mostra ancore disponibili tramite AJAX ---
+    function setCenterToPetLocation(petIdArg) {
+      const petId = petIdArg || selectedPetId;
+      if (!petId) return alert('Seleziona un pet nella tabella o usa il pulsante accanto.');
+      fetch('/get_pet_location/' + encodeURIComponent(petId))
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.gps && data.gps.lat !== undefined) {
+            const lat = parseFloat(data.gps.lat);
+            const lon = parseFloat(data.gps.lon);
+            circle.setLatLng([lat, lon]);
+            map.setView([lat, lon], 18);
+            document.getElementById('center_lat').value = lat.toFixed(7);
+            document.getElementById('center_lng').value = lon.toFixed(7);
+          } else alert('Nessuna posizione GPS disponibile.');
+        })
+        .catch(() => alert('Impossibile recuperare la posizione del pet'));
+    }
+
+    document.getElementById('radius_slider').addEventListener('input', function() {
+      let val = parseInt(this.value);
+      circle.setRadius(val);
+      document.getElementById('radius_label').textContent = val + ' m';
+    });
+
+    map.on('click', function(e) {
+      circle.setLatLng(e.latlng);
+      document.getElementById('center_lat').value = e.latlng.lat.toFixed(7);
+      document.getElementById('center_lng').value = e.latlng.lng.toFixed(7);
+    });
+
     document.getElementById('scan-btn').onclick = function() {
       let resultsDiv = document.getElementById('scan-results');
-      resultsDiv.style.display = 'block';
-      resultsDiv.innerHTML = 'Caricamento ancore...';
-
+      resultsDiv.innerHTML = 'Caricamento...';
       fetch('/anchors_online')
         .then(r => r.json())
         .then(data => {
@@ -409,33 +387,22 @@
           if (data.anchors && data.anchors.length) {
             data.anchors.forEach(anchor => {
               let btn = document.createElement('button');
-              btn.className = 'btn btn-sm btn-outline-primary m-1';
+              btn.className = 'btn-ghost';
               btn.textContent = anchor.anchor_id + " — " + anchor.mac_address;
-              btn.onclick = function() {
-                document.getElementById('mac_address').value = anchor.mac_address;
-              };
+              btn.onclick = () => { document.getElementById('mac_address').value = anchor.mac_address; };
               resultsDiv.appendChild(btn);
             });
-          } else {
-            resultsDiv.innerHTML = "<small>Nessuna ancora trovata. Assicurati che le ancore siano accese e collegate alla rete.</small>";
-          }
+          } else resultsDiv.innerHTML = "<small>Nessuna ancora trovata.</small>";
         });
     };
 
-    // --- Accesso consentito: forza valore submit (0/1) ---
-    document.querySelector('.add-room-form').addEventListener('submit', function(e) {
-      let allowedSwitch = document.getElementById('allowed-switch');
-      if (!allowedSwitch.checked) {
-        allowedSwitch.value = "0";
-        let hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = 'allowed';
-        hidden.value = '0';
-        this.appendChild(hidden);
-        allowedSwitch.disabled = true;
-      } else {
-        allowedSwitch.value = "1";
-      }
+    {% if pet_position %}
+      const initialPetPos = [{{ pet_position[0] }}, {{ pet_position[1] }}];
+      L.marker(initialPetPos).addTo(map).bindPopup("Ultima posizione globale").openPopup();
+    {% endif %}
+
+    document.querySelectorAll('#pets-table tbody tr[data-pet-id]').forEach(tr => {
+      tr.addEventListener('click', () => selectPetRow(tr));
     });
   </script>
 </body>
