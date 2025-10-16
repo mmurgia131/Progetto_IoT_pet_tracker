@@ -3,9 +3,12 @@ from gridfs import GridFS
 from datetime import datetime, timezone
 from bson import ObjectId
 import bcrypt
+import os
+
+connection_string = os.getenv("MONGODB_CONN_STRING")
 
 class PetTrackerDB:
-    def __init__(self, connection_string="mongodb+srv://mariucciamurgia:LHbPpnHsUBC88W7a@cluster0.4wplnch.mongodb.net/"):
+    def __init__(self, connection_string=connection_string):
         try:
             self.client = MongoClient(connection_string, serverSelectionTimeoutMS=5000)
             self.client.admin.command('ping')
@@ -235,19 +238,6 @@ class PetTrackerDB:
     def get_positions(self, pet_id, limit=50):
         return list(self.positions.find({"pet_id": str(pet_id)}).sort("timestamp", DESCENDING).limit(limit))
 
-    # --- IMMAGINI (opzionale, via GridFS) ---
-    def save_pet_image(self, image_data, filename, pet_id):
-        image_id = self.gridfs_images.put(
-            image_data,
-            filename=filename,
-            pet_id=str(pet_id),
-            upload_date=datetime.now(timezone.utc)
-        )
-        return image_id
-
-    def get_pet_image(self, image_id):
-        file = self.gridfs_images.get(self._ensure_oid(image_id))
-        return file.read(), file.filename
 
     # --- ENV DATA ---
     def save_env_data(self, pet_id, temp, hum, timestamp):
@@ -275,7 +265,7 @@ class PetTrackerDB:
             print("Installa shapely per usare questa funzione!")
             return False
 
-    # --- Migrazione (opzionale) ---
+    # --- Migrazione  ---
     def migrate_password_field(self):
         """
         Operazione opzionale per migrare eventuali documenti che usano ancora il campo 'password'

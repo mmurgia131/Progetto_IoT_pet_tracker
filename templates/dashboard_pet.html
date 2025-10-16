@@ -231,7 +231,7 @@
   <script>
     const PET_ID = "{{ pet._id }}";
     const PET_MAC = "{{ pet.get('mac_address','') }}";
-    const STALE_SEC = 3 * 60; // 3 minuti
+    const STALE_SEC = 60; // 1 minuto
 
     let lastGpsTs = null;
     let currentGps = null;

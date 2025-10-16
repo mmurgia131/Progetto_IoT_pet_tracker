@@ -4,10 +4,10 @@ import time
 import json
 import os
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8422442152:AAGNoi5GfcNuaObdO5vttkdgQFTDIpU2L9k")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_IDS_FILE = "chat_ids.json"
 
-NOTIFICATION_COOLDOWN_SEC = int(os.getenv("NOTIFICATION_COOLDOWN_SEC", "60"))
+NOTIFICATION_COOLDOWN_SEC = int(os.getenv("NOTIFICATION_COOLDOWN_SEC", "60")) # per evitare spam
 DEBOUNCE_SEC = float(os.getenv("NOTIFY_DEBOUNCE_SEC", "3.0"))
 
 _pending_lock = threading.Lock()
