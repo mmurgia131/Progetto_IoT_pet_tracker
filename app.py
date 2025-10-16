@@ -19,8 +19,6 @@ from telegram_bot import notify_events, save_chat_id
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-
 ESP32CAM_IP = os.getenv("ESP32CAM_IP")
 MQTT_BROKER = os.getenv("MQTT_BROKER")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))

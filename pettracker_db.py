@@ -5,10 +5,11 @@ from bson import ObjectId
 import bcrypt
 import os
 
-connection_string = os.getenv("MONGODB_CONN_STRING")
 
 class PetTrackerDB:
-    def __init__(self, connection_string=connection_string):
+    def __init__(self, connection_string=None):
+        if connection_string is None:
+            connection_string = os.getenv("MONGODB_CONN_STRING")
         try:
             self.client = MongoClient(connection_string, serverSelectionTimeoutMS=5000)
             self.client.admin.command('ping')
